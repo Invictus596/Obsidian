@@ -1,0 +1,12 @@
+[package]
+name = "obsidian-ui"
+description = "Browser UI shell for the Obsidian web browser."
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+log = "0.4"
+thiserror = "1.0"

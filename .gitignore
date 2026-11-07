@@ -1,0 +1,82 @@
+# =============================================================================
+# Obsidian .gitignore
+# A Rust project that will eventually house large C++ pre-compiled binaries (CEF).
+# =============================================================================
+
+# --- Rust / Cargo ------------------------------------------------------------
+target/
+**/target/
+Cargo.lock
+*.rs.bak
+*.swp
+*.swo
+
+# --- Compiled binaries (native / C++) ----------------------------------------
+# Pre-compiled CEF and other native binaries
+*.so
+*.so.*
+*.dll
+*.dylib
+*.exe
+*.bin
+*.out
+
+# Build output directories commonly produced by C++ / CEF toolchains
+Release/
+Debug/
+release/
+debug/
+build/
+Build/
+x64/
+x86/
+arm64/
+Win32/
+
+# Object files and intermediate artifacts
+*.o
+*.obj
+*.pdb
+*.idb
+*.ilk
+*.exp
+*.lib
+*.a
+
+# --- CEF / Chromium specific -------------------------------------------------
+cef_binary_*/
+cef*.tar.*
+cef*.zip
+cef*.7z
+*.snapshot
+*.pkd
+*.pak
+*.dat
+*.natives_blob*
+*.icudtl*
+
+# --- IDE / editor artifacts --------------------------------------------------
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+.dir-locals.el
+*~.nib
+*.perspective
+*.vscode-test
+
+# --- OS ----------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# --- Misc --------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# End of file

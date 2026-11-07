@@ -1,0 +1,15 @@
+[package]
+name = "obsidian-bin"
+description = "Obsidian web browser — main executable tying core and UI together."
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "obsidian"
+path = "src/main.rs"
+
+[dependencies]
+obsidian-core = { path = "../obsidian-core" }
+obsidian-ui = { path = "../obsidian-ui" }
+env_logger = "0.11"
+log = "0.4"
