@@ -12,7 +12,8 @@
 use log::{info, warn};
 #[allow(unused_imports)]
 use obsidian_core::{
-    go_back as core_go_back, go_forward as core_go_forward, navigate as core_navigate,
+    go_back as core_go_back, go_forward as core_go_forward, load_unpacked_extension as core_load_unpacked_extension,
+    navigate as core_navigate,
     reload as core_reload, resize_browser as core_resize_browser,
     show_dev_tools as core_show_dev_tools,
 };
@@ -246,6 +247,16 @@ fn setup_slint_ui(window: &Window, hwnd: *mut c_void) {
     //
     // ui.on_request_devtools(move || {
     //     let _ = core_show_dev_tools(hwnd);
+    // });
+    //
+    // Wire the extension loader callback:
+    //
+    // ui.on_request_load_extension(move || {
+    //     let ext_path = std::env::current_dir()
+    //         .unwrap_or_else(|_| std::path::PathBuf::from("."))
+    //         .join("tests/dummy_extension");
+    //     let ext_path_str = ext_path.to_string_lossy().to_string();
+    //     let _ = core_load_unpacked_extension(&ext_path_str);
     // });
     //
     // ui.show_with_adapter(adapter);

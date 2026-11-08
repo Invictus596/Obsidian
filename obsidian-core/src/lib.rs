@@ -315,6 +315,60 @@ pub fn show_dev_tools(hwnd: *mut std::ffi::c_void) -> Result<(), EngineInitError
     }
 }
 
+/// Load an unpacked Chromium extension into the global CEF Request Context.
+///
+/// * `absolute_path` — absolute filesystem path to the extension directory
+///   containing `manifest.json`.
+///
+/// With `cef-bindings` enabled this fetches the global CEF Request Context via
+/// `cef::RequestContext::get_global_context()` and calls
+/// `load_extension(absolute_path, ...)` with a dummy/empty handler.
+///
+/// Without the feature this logs a dummy message and returns `Ok(())`.
+pub fn load_unpacked_extension(absolute_path: &str) -> Result<(), EngineInitError> {
+    log::info!(
+        "Loading unpacked CEF extension from: {}",
+        absolute_path
+    );
+
+    #[cfg(feature = "cef-bindings")]
+    {
+        use cef::RequestContext;
+
+        match RequestContext::get_global_context() {
+            Some(context) => {
+                // A dummy extension handler is passed since we don't yet
+                // implement extension event callbacks.
+                context.load_extension(absolute_path, None).map_err(|e| {
+                    log::error!("Failed to load extension: {}", e);
+                    EngineInitError::CefInitializationFailed(e.to_string())
+                })?;
+                log::info!(
+                    "CEF extension loaded from: {}",
+                    absolute_path
+                );
+            }
+            None => {
+                log::error!("Failed to obtain global CEF Request Context.");
+                return Err(EngineInitError::LibraryNotFound(
+                    "CEF Request Context not available".to_string(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(feature = "cef-bindings"))]
+    {
+        log::info!(
+            "CEF bindings disabled: dummy extension loader placeholder. Path: {}",
+            absolute_path
+        );
+        Ok(())
+    }
+}
+
 /// Resize a CEF browser that was previously attached to a native window handle.
 ///
 /// * `hwnd` — native window handle (HWND on Windows) the browser is attached to.

@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Obsidian Test Ext",
+  "version": "1.0",
+  "description": "Dummy extension to test the Obsidian extension loader pipeline.",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [],
+  "host_permissions": []
+}

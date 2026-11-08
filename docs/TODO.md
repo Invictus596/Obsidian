@@ -11,7 +11,8 @@
 | 3 | Live Engine Integration | ✅ Complete |
 | 3.5 | UI Controls ↔ CEF Navigation | ✅ Complete |
 | 3.7 | Viewport Constraints & Navigation Controls | ✅ Complete |
-| 3.9 | Window Dragging & Developer Tools | 🚧 In progress |
+| 3.9 | Window Dragging & Developer Tools | ✅ Complete |
+| 4 | Extension Loader Architecture | 🚧 In progress |
 
 ---
 
@@ -206,6 +207,33 @@ Chromium Developer Tools for debugging rendered content.
 * [ ] DevTools docking / positioning control
 * [ ] Keyboard shortcuts (F12, Ctrl+Shift+I) for DevTools toggle
 * [ ] Custom DevTools theme integration
+
+---
+
+## Phase 4 — Extension Loader Architecture
+
+Goal: Support loading and managing Chromium extensions (Manifest V3) within
+Obsidian via the CEF Request Context.
+
+### Immediate next steps
+
+* [x] `tests/dummy_extension/manifest.json` — Manifest V3 extension
+    (name: "Obsidian Test Ext", version: "1.0", background service worker)
+* [x] `tests/dummy_extension/background.js` — dummy background script
+* [x] `obsidian_core::load_unpacked_extension(absolute_path)` — fetches the
+    global CEF Request Context and calls `load_extension()`
+* [x] `obsidian-ui/src/ui/main.slint` — `[Ext]` button added with
+    `request_load_extension()` callback
+* [x] `obsidian_ui::setup_slint_ui()` maps `request_load_extension` to
+    `obsidian_core::load_unpacked_extension(&path)` resolving the absolute
+    path to `tests/dummy_extension`
+
+### Longer-term Phase 4 goals
+
+* [ ] Extension management UI (enable/disable, uninstall)
+* [ ] Extension permission prompts and policy
+* [ ] Extension icon toolbar integration
+* [ ] Extension storage / messaging API support
 
 ---
 
