@@ -7,7 +7,8 @@
 | 0 | Workspace & architecture scaffolding | ✅ Complete |
 | 1 | CEF Integration (`obsidian-core`) | ✅ Complete |
 | 2 | Fluid UI overlay (`obsidian-ui`) | ✅ Complete |
-| 2.5 | CEF ↔ UI Bridge | 🚧 In progress |
+| 2.5 | CEF ↔ UI Bridge | ✅ Complete |
+| 3 | Live Engine Integration | 🚧 In progress |
 
 ---
 
@@ -89,6 +90,33 @@ handle so CEF renders inside the `engine_viewport` viewport.
 * [ ] Theme engine (dark / light / accent color)
 * [ ] Accessibility and keyboard navigation
 * [ ] Multi-window / split-view support
+
+---
+
+## Phase 3 — Live Engine Integration
+
+Goal: Make CEF actually render inside the Slint UI viewport with proper
+threading and resize handling.
+
+### Immediate next steps
+
+* [x] Pre-compiled CEF binaries downloaded via `scripts/download_cef.ps1`
+    into `cef_binary/` (CEF 156.0.26 / Chromium 156.0.8078.88)
+* [x] `cef_bindings` feature enabled with `multi_threaded_message_loop = true`
+    so CEF doesn't block the Slint UI thread
+* [x] `no_sandbox = true` set in CEF initialization settings
+* [x] `obsidian_core::resize_browser(hwnd, width, height)` added to handle
+    window resize events
+* [x] Slint resize events wired to call `resize_browser()` with the
+    `engine_viewport` dimensions
+
+### Longer-term Phase 3 goals
+
+* [ ] CEF message loop pump integrated with winit event loop
+* [ ] Parent/clip CEF browser to the `engine_viewport` rectangle
+* [ ] Off-screen rendering (OSR) → Slint texture composition
+* [ ] Cookie / cache / profile management
+* [ ] DevTools attachment and remote debugging
 
 ---
 

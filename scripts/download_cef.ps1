@@ -9,7 +9,7 @@
     Windows x64 CEF distribution published by Spotify's CEF mirror and
     extracting it into ./cef_binary.
 
-    Source: https://cef-builds.spotifycdn.com/cef_binary_*.zip
+    Source: https://cef-builds.spotifycdn.com/index.json
     (Spotify CEF binary tracker mirrors Chromium's official CEF builds.)
 
 .NOTES
@@ -21,8 +21,8 @@ param(
     # Destination folder for the extracted CEF binaries.
     [string]$OutputDir = "cef_binary",
 
-    # Spotify CEF tracker index page listing available builds.
-    [string]$TrackerUrl = "https://cef-builds.spotifycdn.com/index.html",
+    # Spotify CEF build index JSON.
+    [string]$IndexUrl = "https://cef-builds.spotifycdn.com/index.json",
 
     # Optional override for the direct zip URL.
     [string]$ZipUrl = $null
@@ -34,33 +34,68 @@ $ErrorActionPreference = "Stop"
 Write-Host "=== Obsidian CEF Downloader ===" -ForegroundColor Cyan
 
 # ---------------------------------------------------------------------------
-# Resolve the latest Windows x64 CEF zip URL.
+# Resolve the latest Windows x64 CEF zip URL from index.json.
 # ---------------------------------------------------------------------------
 if (-not $ZipUrl) {
-    Write-Host "Querying Spotify CEF tracker for latest Windows x64 build..." -ForegroundColor Gray
+    Write-Host "Querying Spotify CEF build index for latest Windows x64 build..." -ForegroundColor Gray
 
     try {
-        $html = Invoke-RestMethod -Uri $TrackerUrl -TimeoutSec 30
+        $json = Invoke-RestMethod -Uri $IndexUrl -TimeoutSec 60 -ContentType "application/json"
     } catch {
-        Write-Error "Failed to fetch CEF tracker page: $_"
+        Write-Error "Failed to fetch CEF build index: $_"
         exit 1
     }
 
-    # The tracker page lists links like cef_binary_113.17+g0f3a4e2+chromium-113.0.5672.63_windows64_client.zip
-    # We look for the most recent windows64 client zip.
-    $matches = ($html | Out-String) -match 'href="([^"]*windows64[^"]*\.zip)"'
-    if (-not $matches) {
-        Write-Error "Could not locate a Windows x64 CEF zip on the tracker page."
+    # The JSON is keyed by platform tab (windows64, macosx64, linux64, etc.).
+    # Each entry has a 'versions' array sorted newest first.
+    $windows64Builds = $json.windows64
+    if (-not $windows64Builds -or -not $windows64Builds.versions) {
+        Write-Error "No Windows x64 builds found in CEF index."
         exit 1
     }
 
-    # Take the first match (tracker lists newest first).
-    $zipName = $matches[1]
+    $versions = $windows64Builds.versions
+    $zipName = $null
+
+    # Iterate versions newest-first, looking for a non-beta client file.
+    # Prefer .zip, fall back to .tar.bz2.
+    foreach ($version in $versions) {
+        $files = $version.files
+        if (-not $files) { continue }
+
+        # Skip beta builds.
+        $isBeta = ($files[0].name -like "*_beta*")
+        if ($isBeta) { continue }
+
+        # Find the 'client' file type, preferring .zip over .tar.bz2.
+        $zipFile = $files | Where-Object { $_.type -eq 'client' -and $_.name -like "*.zip" } | Select-Object -First 1
+        $tarFile = $files | Where-Object { $_.type -eq 'client' -and $_.name -like "*.tar.bz2" } | Select-Object -First 1
+
+        if ($zipFile) {
+            $zipName = $zipFile.name
+            $archiveType = "zip"
+        } elseif ($tarFile) {
+            $zipName = $tarFile.name
+            $archiveType = "tar.bz2"
+        } else {
+            continue
+        }
+
+        Write-Host "Found CEF build: $($version.cef_version) / Chromium $($version.chromium_version)" -ForegroundColor Green
+        Write-Host "File: $zipName ($archiveType)" -ForegroundColor Gray
+        break
+    }
+
+    if (-not $zipName) {
+        Write-Error "Could not locate a Windows x64 client CEF zip in the build index."
+        exit 1
+    }
+
     $ZipUrl = "https://cef-builds.spotifycdn.com/$zipName"
-
-    Write-Host "Found CEF build: $zipName" -ForegroundColor Green
+    $script:ArchiveType = $archiveType
 } else {
     Write-Host "Using provided CEF zip URL: $ZipUrl" -ForegroundColor Gray
+    $script:ArchiveType = "zip"
 }
 
 # ---------------------------------------------------------------------------
@@ -71,7 +106,7 @@ $zipPath = Join-Path $env:TEMP "obsidian_cef_binary.zip"
 if (-not (Test-Path $zipPath)) {
     Write-Host "Downloading CEF binaries from $ZipUrl ..." -ForegroundColor Cyan
     try {
-        Invoke-WebRequest -Uri $ZipUrl -OutFile $zipPath -TimeoutSec 120
+        Invoke-WebRequest -Uri $ZipUrl -OutFile $zipPath -TimeoutSec 300
     } catch {
         Write-Error "Failed to download CEF binaries: $_"
         exit 1
@@ -93,18 +128,33 @@ if (-not $outputPath) {
 
 Write-Host "Extracting CEF binaries into $($outputPath.Path) ..." -ForegroundColor Cyan
 
-# Use Expand-Archive (built into PowerShell 5.0+).
-try {
-    Expand-Archive -Path $zipPath -DestinationPath $outputPath.Path -Force
-} catch {
-    Write-Error "Failed to extract CEF archive: $_"
-    exit 1
+Write-Host "Extracting CEF binaries into $($outputPath.Path) ..." -ForegroundColor Cyan
+
+# Determine archive type from file extension.
+$isTarBz2 = $zipName -like "*.tar.bz2"
+
+if ($isTarBz2) {
+    # Windows 10/11 includes tar.exe for .tar.bz2 extraction.
+    try {
+        & tar -xjf $zipPath -C $outputPath.Path
+    } catch {
+        Write-Error "Failed to extract CEF archive (tar.bz2): $_"
+        exit 1
+    }
+} else {
+    # Use Expand-Archive (built into PowerShell 5.0+) for .zip.
+    try {
+        Expand-Archive -Path $zipPath -DestinationPath $outputPath.Path -Force
+    } catch {
+        Write-Error "Failed to extract CEF archive: $_"
+        exit 1
+    }
 }
 
-# Spotify CEF zips often contain a top-level folder (e.g. cef_binary_.../).
+# Spotify CEF zips/tars often contain a top-level folder (e.g. cef_binary_.../).
 # If only one folder was extracted, promote its contents up one level so that
 # cef_binary/Release and cef_binary/Include sit directly under $OutputDir.
-$childItems = Get-ChildItem -Path $outputPath.Path
+$childItems = @(Get-ChildItem -Path $outputPath.Path)
 if ($childItems.Count -eq 1 -and $childItems[0].PSIsContainer) {
     $inner = $childItems[0].FullName
     Write-Host "Flattening nested folder: $($childItems[0].Name)" -ForegroundColor Gray
@@ -133,4 +183,4 @@ Write-Host "" -ForegroundColor Gray
 Write-Host "=== CEF binaries ready ===" -ForegroundColor Cyan
 Write-Host "Next steps:" -ForegroundColor Gray
 Write-Host "  1. Set CEF_ROOT=$($outputPath.Path) (optional, defaults to cef_binary/)" -ForegroundColor Gray
-Write-Host "  2. cargo build --release" -ForegroundColor Gray
+Write-Host "  2. cargo build --release --features obsidian-core/cef-bindings" -ForegroundColor Gray

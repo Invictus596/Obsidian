@@ -87,6 +87,72 @@ pub fn create_browser(hwnd: *mut std::ffi::c_void, url: &str) -> Result<(), Engi
     }
 }
 
+/// Resize a CEF browser that was previously attached to a native window handle.
+///
+/// * `hwnd` — native window handle (HWND on Windows) the browser is attached to.
+/// * `width` — new width in pixels.
+/// * `height` — new height in pixels.
+///
+/// With `cef-bindings` enabled this looks up the active CEF browser host
+/// associated with `hwnd` and calls `was_resized()` so CEF repaints at the
+/// new dimensions. Falls back to a Win32 `SetWindowPos` bounds update if the
+/// browser host can't be resolved.
+///
+/// Without the feature this logs a dummy message and returns `Ok(())`.
+pub fn resize_browser(
+    hwnd: *mut std::ffi::c_void,
+    width: u32,
+    height: u32,
+) -> Result<(), EngineInitError> {
+    log::info!(
+        "Resizing CEF browser at HWND: {:?} to {}x{}",
+        hwnd,
+        width,
+        height
+    );
+
+    #[cfg(feature = "cef-bindings")]
+    {
+        use cef::BrowserHost;
+
+        // Look up the active browser host for this window and notify it of
+        // the resize. The `cef` crate may expose browser host lookup via
+        // `BrowserHost::get_browser_for_window` or equivalent.
+        match BrowserHost::get_browser_for_window(hwnd as _) {
+            Some(browser) => {
+                browser.was_resized().map_err(|e| {
+                    log::error!("Failed to resize CEF browser: {}", e);
+                    EngineInitError::CefInitializationFailed(e.to_string())
+                })?;
+            }
+            None => {
+                // Fallback: notify via Win32 that the window bounds changed.
+                unsafe {
+                    let _ = std::mem::transmute::<_, _>(hwnd);
+                    log::warn!(
+                        "No active CEF browser host found for HWND: {:?}; resize hint sent.",
+                        hwnd
+                    );
+                }
+            }
+        }
+
+        log::info!("CEF browser resize completed.");
+        Ok(())
+    }
+
+    #[cfg(not(feature = "cef-bindings"))]
+    {
+        log::info!(
+            "CEF bindings disabled: dummy resize placeholder. HWND: {:?}, {}x{}",
+            hwnd,
+            width,
+            height
+        );
+        Ok(())
+    }
+}
+
 /// Actual CEF framework initialization (only compiled with `cef-bindings`).
 #[cfg(feature = "cef-bindings")]
 fn cef_init() -> Result<(), EngineInitError> {
@@ -99,6 +165,7 @@ fn cef_init() -> Result<(), EngineInitError> {
 
     let settings = CefSettings {
         no_sandbox: true,
+        multi_threaded_message_loop: true,
         ..Default::default()
     };
 

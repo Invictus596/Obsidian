@@ -5,11 +5,16 @@
 //! This crate owns window management, chrome, and the Slint UI overlay that
 //! composites CEF-rendered web content. The UI lives in a borderless winit
 //! window; the Slint template is defined in `src/ui/main.slint`.
+//!
+//! Phase 3: hooks into winit resize events and notifies `obsidian-core` via
+//! `resize_browser()` so the CEF browser stays in sync with the viewport.
 
 use log::{info, warn};
+use obsidian_core::resize_browser as core_resize_browser;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::os::raw::c_void;
 use winit::dpi::LogicalSize;
+use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoop;
 use winit::window::{Window, WindowAttributes};
 
@@ -51,10 +56,14 @@ impl EngineViewportHandle {
     }
 }
 
-/// Initialize the UI shell: spawn a borderless winit window and render the
-/// Slint UI inside it.
+/// Initialize the UI shell: spawn a borderless winit window.
+///
+/// Returns the viewport handle and the event loop. The caller (`obsidian-bin`)
+/// is responsible for calling `obsidian_core::create_browser()` with the
+/// handle and then running the event loop. Resize events are forwarded to
+/// `obsidian_core::resize_browser()` automatically.
 #[allow(deprecated)]
-pub fn init() -> Result<EngineViewportHandle, UiInitError> {
+pub fn init() -> Result<(EngineViewportHandle, EventLoop<()>), UiInitError> {
     info!("Initializing Obsidian UI shell (Phase 2: Arc/Helium fluid UI)...");
 
     let event_loop = EventLoop::new().map_err(|e| {
@@ -80,11 +89,11 @@ pub fn init() -> Result<EngineViewportHandle, UiInitError> {
     info!("Native window handle acquired: {:?}", handle);
 
     // Load and render the Slint UI inside the winit window.
-    setup_slint_ui(&window, &event_loop);
+    setup_slint_ui(&window);
 
     info!("Obsidian UI shell initialized (borderless, compact-mode).");
 
-    Ok(EngineViewportHandle { handle })
+    Ok((EngineViewportHandle { handle }, event_loop))
 }
 
 /// Expose the native window handle of the engine viewport so `obsidian-core`
@@ -100,8 +109,50 @@ pub fn engine_viewport_handle() -> Option<RawWindowHandle> {
     None
 }
 
+/// Run the winit event loop, forwarding resize events to `obsidian-core`.
+///
+/// When the window is resized, the new dimensions are passed to
+/// `obsidian_core::resize_browser()` so the CEF browser repaints at the
+/// correct size. In the full implementation, the `engine_viewport` rectangle
+/// dimensions (rather than the full window size) would be computed here.
+#[allow(deprecated)]
+pub fn run_event_loop(
+    event_loop: EventLoop<()>,
+    hwnd: *mut c_void,
+) -> Result<(), UiInitError> {
+    info!("Starting winit event loop with CEF resize forwarding...");
+
+    event_loop.run(move |event, elwt| {
+        elwt.set_control_flow(winit::event_loop::ControlFlow::Wait);
+
+        match event {
+            Event::WindowEvent {
+                event: WindowEvent::Resized(size),
+                ..
+            } => {
+                info!(
+                    "Window resized to {}x{} — notifying CEF browser",
+                    size.width, size.height
+                );
+                if let Err(e) = core_resize_browser(hwnd, size.width, size.height) {
+                    warn!("Failed to resize CEF browser: {}", e);
+                }
+            }
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
+                elwt.exit();
+            }
+            _ => {}
+        }
+    }).map_err(|e| UiInitError::EventLoopFailed(e.to_string()))?;
+
+    Ok(())
+}
+
 /// Set up Slint UI rendering inside the winit window.
-fn setup_slint_ui(_window: &Window, _event_loop: &EventLoop<()>) {
+fn setup_slint_ui(_window: &Window) {
     // Slint integrates with winit via `slint::platform::winit::WindowAdapter`:
     //
     // use slint::platform::winit::WindowAdapter;

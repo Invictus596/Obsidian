@@ -20,6 +20,9 @@ slint = { version = "1.6", features = ["backend-winit"] }
 # Raw window handle access (HWND on Windows) for CEF viewport attachment
 raw-window-handle = "0.6"
 
+# CEF core for resize_browser() calls on window resize
+obsidian-core = { path = "../obsidian-core" }
+
 [build-dependencies]
 # Compiles .slint UI templates at build time
 slint-build = "1.6"
