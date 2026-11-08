@@ -6,7 +6,8 @@
 |-------|-----------|--------|
 | 0 | Workspace & architecture scaffolding | ✅ Complete |
 | 1 | CEF Integration (`obsidian-core`) | ✅ Complete |
-| 2 | Fluid UI overlay (`obsidian-ui`) | 🚧 In progress |
+| 2 | Fluid UI overlay (`obsidian-ui`) | ✅ Complete |
+| 2.5 | CEF ↔ UI Bridge | 🚧 In progress |
 
 ---
 
@@ -55,29 +56,28 @@ subprocess lifecycle.
 
 ---
 
-## Phase 2 — Fluid UI Overlay (`obsidian-ui`)
+## Phase 2.5 — CEF ↔ UI Bridge (`obsidian-core` ↔ `obsidian-ui`)
 
-Goal: An expressive, fluid, borderless UI shell inspired by Arc and Helium,
-compositing CEF-rendered content behind native Rust window chrome.
+Goal: Attach the Chromium Embedded Framework browser to the Slint UI window
+handle so CEF renders inside the `engine_viewport` viewport.
 
-Current focus: **borderless, compact-mode UI shell** with Arc-style vertical
-sidebar, compact top bar (URL input + window controls), and an
-`engine_viewport` rectangle where CEF will eventually render.
+### Current work
+
+* [x] `obsidian_core::create_browser(hwnd, url)` — attach CEF browser to the
+    native window handle (HWND on Windows) returned by `obsidian-ui`
+* [x] `obsidian-ui::init()` returns a raw window handle pointer
+    (`*mut c_void`) for cross-crate CEF attachment
+* [x] `obsidian-bin` wires: `core_init()` → `ui_init()` → `create_browser()`
+    → event loop run
 
 ### Immediate next steps
 
-* [x] Add `winit` and `slint` dependencies to `obsidian-ui/Cargo.toml`
-* [x] Create `obsidian-ui/src/ui/main.slint` Slint UI template:
-    * [x] Left-aligned vertical sidebar (Arc-style, dark cyberpunk aesthetic)
-    * [x] Top horizontal compact mode title bar (dummy URL input + window controls)
-    * [x] Large empty rectangle as `engine_viewport` for CEF rendering
-* [x] Update `obsidian-ui/src/lib.rs` to spawn a winit borderless window and render the Slint UI inside it
-* [x] Expose `engine_viewport_handle()` returning the native window handle (HWND on Windows)
-* [ ] Wire Slint ↔ winit event loop integration
-* [ ] Implement window frame controls (close / minimize / maximize / drag)
-* [ ] Implement translucent background and drop-shadow styling
-* [ ] Implement vertical tab strip with tab switching
-* [ ] Implement CEF off-screen → UI texture composition pipeline
+* [ ] Wire Slint ↔ winit event loop integration so the window stays alive
+    while CEF renders
+* [ ] Implement CEF message loop pump on the UI thread
+* [ ] Parent/clip CEF browser to the `engine_viewport` rectangle
+* [ ] Implement off-screen rendering (OSR) → Slint texture composition
+* [ ] Handle window resize → CEF resize notification
 
 ### Longer-term Phase 2 goals
 

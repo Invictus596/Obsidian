@@ -16,7 +16,7 @@
 //!
 //! ## Status
 //!
-//! Phase 1 scaffolding.
+//! Phase 1 scaffolding. Phase 2.5: CEF ↔ UI bridge.
 
 #![cfg_attr(not(feature = "cef-bindings"), allow(dead_code))]
 
@@ -45,6 +45,45 @@ pub fn init() -> Result<(), EngineInitError> {
         log::info!("CEF bindings disabled: running dummy Phase 1 placeholder.");
         log::info!("Obsidian engine core initialized.");
         return Ok(());
+    }
+}
+
+/// Attach a CEF browser to a native window handle and navigate to a URL.
+///
+/// * `hwnd` — native window handle (HWND on Windows) returned by `obsidian-ui`.
+/// * `url` — the initial URL to load.
+///
+/// With `cef-bindings` enabled this configures `cef::WindowInfo`, sets its
+/// parent window to `hwnd`, and calls `cef::BrowserHost::create_browser`
+/// pointing at `url`.
+///
+/// Without the feature this logs a dummy message and returns `Ok(())`.
+pub fn create_browser(hwnd: *mut std::ffi::c_void, url: &str) -> Result<(), EngineInitError> {
+    log::info!("Creating CEF browser attached to HWND: {:?}, navigating to {}", hwnd, url);
+
+    #[cfg(feature = "cef-bindings")]
+    {
+        use cef::BrowserHost;
+        use cef::CefWindowInfo;
+        use cef::WindowInfo;
+
+        let mut window_info = CefWindowInfo::new();
+        window_info.set_as_child(hwnd as _);
+
+        BrowserHost::create_browser(window_info, url, None).map_err(|e| {
+            log::error!("Failed to create CEF browser: {}", e);
+            EngineInitError::CefInitializationFailed(e.to_string())
+        })?;
+
+        log::info!("CEF browser created and attached to viewport.");
+        Ok(())
+    }
+
+    #[cfg(not(feature = "cef-bindings"))]
+    {
+        log::info!("CEF bindings disabled: dummy browser placeholder.");
+        log::info!("Dummy CEF browser attached to HWND: {:?}, navigating to {}", hwnd, url);
+        Ok(())
     }
 }
 

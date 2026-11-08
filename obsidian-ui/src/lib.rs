@@ -8,6 +8,7 @@
 
 use log::{info, warn};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+use std::os::raw::c_void;
 use winit::dpi::LogicalSize;
 use winit::event_loop::EventLoop;
 use winit::window::{Window, WindowAttributes};
@@ -32,6 +33,22 @@ pub type NativeWindowHandle = RawWindowHandle;
 /// rectangle defined in the Slint template.
 pub struct EngineViewportHandle {
     pub handle: RawWindowHandle,
+}
+
+impl EngineViewportHandle {
+    /// Return the native window handle as an OS-agnostic raw pointer
+    /// (`*mut c_void`). This is the value `obsidian_core::create_browser`
+    /// expects as its `hwnd` argument.
+    pub fn as_raw_pointer(&self) -> *mut c_void {
+        match &self.handle {
+            RawWindowHandle::Win32(handle) => handle.hwnd.get() as *mut c_void,
+            RawWindowHandle::AppKit(handle) => handle.ns_view.as_ptr(),
+            RawWindowHandle::Xlib(handle) => handle.window as *mut c_void,
+            RawWindowHandle::Wayland(handle) => handle.surface.as_ptr(),
+            RawWindowHandle::Xcb(handle) => handle.window.get() as *mut c_void,
+            _ => std::ptr::null_mut(),
+        }
+    }
 }
 
 /// Initialize the UI shell: spawn a borderless winit window and render the
