@@ -10,3 +10,12 @@ path = "src/lib.rs"
 [dependencies]
 log = "0.4"
 thiserror = "1.0"
+
+# Chromium Embedded Framework bindings. Optional — only linked when the
+# `cef-bindings` feature is enabled. Requires pre-compiled CEF binaries
+# discovered via build.rs (CEF_ROOT env var or default cef_binary/ folder).
+cef = { version = "156", optional = true }
+
+[features]
+default = []
+cef-bindings = ["dep:cef"]

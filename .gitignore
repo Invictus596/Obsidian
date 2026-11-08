@@ -44,6 +44,8 @@ Win32/
 *.a
 
 # --- CEF / Chromium specific -------------------------------------------------
+# Extracted CEF pre-compiled binaries (large, downloaded via scripts/download_cef.ps1)
+cef_binary/
 cef_binary_*/
 cef*.tar.*
 cef*.zip
