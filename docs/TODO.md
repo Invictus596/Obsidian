@@ -8,7 +8,8 @@
 | 1 | CEF Integration (`obsidian-core`) | ✅ Complete |
 | 2 | Fluid UI overlay (`obsidian-ui`) | ✅ Complete |
 | 2.5 | CEF ↔ UI Bridge | ✅ Complete |
-| 3 | Live Engine Integration | 🚧 In progress |
+| 3 | Live Engine Integration | ✅ Complete |
+| 3.5 | UI Controls ↔ CEF Navigation | 🚧 In progress |
 
 ---
 
@@ -117,6 +118,31 @@ threading and resize handling.
 * [ ] Off-screen rendering (OSR) → Slint texture composition
 * [ ] Cookie / cache / profile management
 * [ ] DevTools attachment and remote debugging
+
+---
+
+## Phase 3.5 — UI Controls ↔ CEF Navigation
+
+Goal: Wire the Slint UI address bar and controls to control the live CEF
+browser instance.
+
+### Immediate next steps
+
+* [x] `obsidian_core::navigate(hwnd, url)` — find CEF browser by HWND and call
+    `get_main_frame().load_url(url)`
+* [x] `obsidian-ui/src/ui/main.slint` — URL `LineEdit` with `accepted` signal
+    triggering `request_navigation(string)` callback
+* [x] Map Slint `request_navigation` callback to `obsidian_core::navigate()`
+    with URL formatting (prepend `https://` if missing)
+* [x] Ensure callback has access to raw HWND for cross-crate navigation
+
+### Longer-term Phase 3.5 goals
+
+* [ ] Back / forward / reload buttons wired to CEF frame navigation
+* [ ] Address bar updates on page load / navigation events
+* [ ] Search engine fallback for non-URL queries
+* [ ] Bookmark bar and bookmark management
+* [ ] Tab-specific URL bars
 
 ---
 

@@ -16,6 +16,8 @@ export component MainWindow inherits Window {
     height: 800px;
     background: #050508;
 
+    callback request_navigation(string);
+
     // -----------------------------------------------------------------------
     // Top compact mode title bar
     // -----------------------------------------------------------------------
@@ -24,11 +26,15 @@ export component MainWindow inherits Window {
         spacing: 8px;
         padding: 8px;
 
-        // Dummy URL input (compact mode)
+        // URL input (compact mode)
         LineEdit {
-            text: "https://obsidian.dev";
+            id: url_input;
+            text: "https://duckduckgo.com";
             width: 600px;
             height: 28px;
+            accepted => {
+                root.request_navigation(text);
+            }
         }
 
         // Spacer pushes window controls to the right

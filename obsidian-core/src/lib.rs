@@ -87,6 +87,60 @@ pub fn create_browser(hwnd: *mut std::ffi::c_void, url: &str) -> Result<(), Engi
     }
 }
 
+/// Navigate an already-attached CEF browser to a new URL.
+///
+/// * `hwnd` — native window handle (HWND on Windows) the browser is attached to.
+/// * `url` — the URL to load.
+///
+/// With `cef-bindings` enabled this looks up the active CEF browser host
+/// associated with `hwnd`, gets its main frame, and calls `load_url(url)`.
+///
+/// Without the feature this logs a dummy message and returns `Ok(())`.
+pub fn navigate(hwnd: *mut std::ffi::c_void, url: &str) -> Result<(), EngineInitError> {
+    log::info!(
+        "Navigating CEF browser at HWND: {:?} to {}",
+        hwnd,
+        url
+    );
+
+    #[cfg(feature = "cef-bindings")]
+    {
+        use cef::BrowserHost;
+
+        match BrowserHost::get_browser_for_window(hwnd as _) {
+            Some(browser) => {
+                let main_frame = browser.get_main_frame().map_err(|e| {
+                    log::error!("Failed to get main frame: {}", e);
+                    EngineInitError::CefInitializationFailed(e.to_string())
+                })?;
+                main_frame.load_url(url).map_err(|e| {
+                    log::error!("Failed to load URL: {}", e);
+                    EngineInitError::CefInitializationFailed(e.to_string())
+                })?;
+                log::info!("CEF browser navigated to {}", url);
+            }
+            None => {
+                log::warn!(
+                    "No active CEF browser host found for HWND: {:?}; cannot navigate.",
+                    hwnd
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(feature = "cef-bindings"))]
+    {
+        log::info!(
+            "CEF bindings disabled: dummy navigate placeholder. HWND: {:?}, {}",
+            hwnd,
+            url
+        );
+        Ok(())
+    }
+}
+
 /// Resize a CEF browser that was previously attached to a native window handle.
 ///
 /// * `hwnd` — native window handle (HWND on Windows) the browser is attached to.

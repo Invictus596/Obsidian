@@ -10,7 +10,7 @@
 //! `resize_browser()` so the CEF browser stays in sync with the viewport.
 
 use log::{info, warn};
-use obsidian_core::resize_browser as core_resize_browser;
+use obsidian_core::{navigate as core_navigate, resize_browser as core_resize_browser};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::os::raw::c_void;
 use winit::dpi::LogicalSize;
@@ -86,10 +86,18 @@ pub fn init() -> Result<(EngineViewportHandle, EventLoop<()>), UiInitError> {
         .window_handle()
         .map_err(|e| UiInitError::ToolkitUnavailable(e.to_string()))?
         .into();
-    info!("Native window handle acquired: {:?}", handle);
+    let hwnd = match &handle {
+        RawWindowHandle::Win32(h) => h.hwnd.get() as *mut c_void,
+        RawWindowHandle::AppKit(h) => h.ns_view.as_ptr(),
+        RawWindowHandle::Xlib(h) => h.window as *mut c_void,
+        RawWindowHandle::Wayland(h) => h.surface.as_ptr(),
+        RawWindowHandle::Xcb(h) => h.window.get() as *mut c_void,
+        _ => std::ptr::null_mut(),
+    };
+    info!("Native window handle acquired: {:?}", hwnd);
 
     // Load and render the Slint UI inside the winit window.
-    setup_slint_ui(&window);
+    setup_slint_ui(&window, hwnd);
 
     info!("Obsidian UI shell initialized (borderless, compact-mode).");
 
@@ -151,13 +159,31 @@ pub fn run_event_loop(
     Ok(())
 }
 
-/// Set up Slint UI rendering inside the winit window.
-fn setup_slint_ui(_window: &Window) {
+/// Set up Slint UI rendering inside the winit window and wire up the
+/// `request_navigation` callback to `obsidian_core::navigate()`.
+fn setup_slint_ui(_window: &Window, hwnd: *mut c_void) {
     // Slint integrates with winit via `slint::platform::winit::WindowAdapter`:
     //
     // use slint::platform::winit::WindowAdapter;
     // let adapter = WindowAdapter::new(window, event_loop.create_proxy(), false);
     // let ui = MainWindow::new();
+    //
+    // Wire the Slint request_navigation callback to the CEF engine:
+    //
+    // ui.on_request_navigation(move |url: slint::SharedString| {
+    //     let url_str = url.trim();
+    //     let formatted_url = if url_str.starts_with("http://")
+    //         || url_str.starts_with("https://")
+    //     {
+    //         url_str.to_string()
+    //     } else if !url_str.is_empty() {
+    //         format!("https://{}", url_str)
+    //     } else {
+    //         return;
+    //     };
+    //     let _ = core_navigate(hwnd, &formatted_url);
+    // });
+    //
     // ui.show_with_adapter(adapter);
     //
     // The MainWindow component is generated from src/ui/main.slint via
