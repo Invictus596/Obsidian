@@ -265,6 +265,56 @@ pub fn reload(hwnd: *mut std::ffi::c_void) -> Result<(), EngineInitError> {
     }
 }
 
+/// Open Chromium Developer Tools for the CEF browser attached to `hwnd`.
+///
+/// * `hwnd` — native window handle (HWND on Windows) the browser is attached to.
+///
+/// With `cef-bindings` enabled this looks up the active `BrowserHost`,
+/// configures a new empty `WindowInfo` (so DevTools spawns in its own native
+/// OS popup window rather than embedding in Slint), and calls
+/// `browser_host.show_dev_tools()`.
+///
+/// Without the feature this logs a dummy message and returns `Ok(())`.
+pub fn show_dev_tools(hwnd: *mut std::ffi::c_void) -> Result<(), EngineInitError> {
+    log::info!("Opening DevTools for CEF browser at HWND: {:?}", hwnd);
+
+    #[cfg(feature = "cef-bindings")]
+    {
+        use cef::BrowserHost;
+        use cef::WindowInfo;
+
+        match BrowserHost::get_browser_for_window(hwnd as _) {
+            Some(browser) => {
+                // An empty WindowInfo causes DevTools to open in its own
+                // top-level native OS window instead of being embedded.
+                let devtools_info = WindowInfo::new();
+                browser.show_dev_tools(devtools_info).map_err(|e| {
+                    log::error!("Failed to show DevTools: {}", e);
+                    EngineInitError::CefInitializationFailed(e.to_string())
+                })?;
+                log::info!("DevTools opened for HWND: {:?}", hwnd);
+            }
+            None => {
+                log::warn!(
+                    "No active CEF browser host found for HWND: {:?}; cannot open DevTools.",
+                    hwnd
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(feature = "cef-bindings"))]
+    {
+        log::info!(
+            "CEF bindings disabled: dummy show_dev_tools placeholder. HWND: {:?}",
+            hwnd
+        );
+        Ok(())
+    }
+}
+
 /// Resize a CEF browser that was previously attached to a native window handle.
 ///
 /// * `hwnd` — native window handle (HWND on Windows) the browser is attached to.

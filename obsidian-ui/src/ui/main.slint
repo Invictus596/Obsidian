@@ -20,81 +20,105 @@ export component MainWindow inherits Window {
     callback request_back();
     callback request_forward();
     callback request_reload();
+    callback window_drag_requested();
+    callback request_devtools();
 
     // -----------------------------------------------------------------------
     // Top compact mode title bar
     // -----------------------------------------------------------------------
-    HorizontalBox {
-        background: #0a0a0f;
-        spacing: 4px;
-        padding: 8px;
+    TouchArea {
+        // Wrap the entire top bar so dragging anywhere on the background
+        // moves the borderless window. Individual interactive children
+        // (buttons, LineEdit) still receive their own click events because
+        // Slint propagates pointer events to the topmost hit-tested element.
+        HorizontalBox {
+            background: #0a0a0f;
+            spacing: 4px;
+            padding: 8px;
 
-        // Navigation controls: back, forward, reload
-        Button {
-            text: "[<]";
-            width: 32px;
-            height: 28px;
-            background: #1a1a2e;
-            color: #ccccdd;
-            clicked => { root.request_back(); }
-        }
-        Button {
-            text: "[>]";
-            width: 32px;
-            height: 28px;
-            background: #1a1a2e;
-            color: #ccccdd;
-            clicked => { root.request_forward(); }
-        }
-        Button {
-            text: "[C]";
-            width: 32px;
-            height: 28px;
-            background: #1a1a2e;
-            color: #ccccdd;
-            clicked => { root.request_reload(); }
-        }
+            // Navigation controls: back, forward, reload
+            Button {
+                text: "[<]";
+                width: 32px;
+                height: 28px;
+                background: #1a1a2e;
+                color: #ccccdd;
+                clicked => { root.request_back(); }
+            }
+            Button {
+                text: "[>]";
+                width: 32px;
+                height: 28px;
+                background: #1a1a2e;
+                color: #ccccdd;
+                clicked => { root.request_forward(); }
+            }
+            Button {
+                text: "[C]";
+                width: 32px;
+                height: 28px;
+                background: #1a1a2e;
+                color: #ccccdd;
+                clicked => { root.request_reload(); }
+            }
 
-        // URL input (compact mode)
-        LineEdit {
-            id: url_input;
-            text: "https://duckduckgo.com";
-            width: 600px;
-            height: 28px;
-            accepted => {
-                root.request_navigation(text);
+            // URL input (compact mode)
+            LineEdit {
+                id: url_input;
+                text: "https://duckduckgo.com";
+                width: 600px;
+                height: 28px;
+                accepted => {
+                    root.request_navigation(text);
+                }
+            }
+
+            // Spacer pushes window controls to the right
+            HorizontalBox {
+                width: 1fr;
+            }
+
+            // Window controls (traffic-light style)
+            Button {
+                text: "—";
+                width: 36px;
+                height: 24px;
+                background: #1a1a2e;
+                color: #ccccdd;
+                clicked => { /* minimize */ }
+            }
+            Button {
+                text: "□";
+                width: 36px;
+                height: 24px;
+                background: #1a1a2e;
+                color: #ccccdd;
+                clicked => { /* maximize / restore */ }
+            }
+            Button {
+                text: "✕";
+                width: 36px;
+                height: 24px;
+                background: #2a1a1e;
+                color: #ff6b6b;
+                clicked => { window.close(); }
+            }
+
+            // DevTools button
+            Button {
+                text: "[D]";
+                width: 32px;
+                height: 28px;
+                background: #2a2a3a;
+                color: #00d4ff;
+                clicked => { root.request_devtools(); }
             }
         }
 
-        // Spacer pushes window controls to the right
-        HorizontalBox {
-            width: 1fr;
-        }
-
-        // Window controls (traffic-light style)
-        Button {
-            text: "—";
-            width: 36px;
-            height: 24px;
-            background: #1a1a2e;
-            color: #ccccdd;
-            clicked => { /* minimize */ }
-        }
-        Button {
-            text: "□";
-            width: 36px;
-            height: 24px;
-            background: #1a1a2e;
-            color: #ccccdd;
-            clicked => { /* maximize / restore */ }
-        }
-        Button {
-            text: "✕";
-            width: 36px;
-            height: 24px;
-            background: #2a1a1e;
-            color: #ff6b6b;
-            clicked => { window.close(); }
+        pointer-event => {
+            if (pressed) {
+                root.window_drag_requested();
+            }
         }
     }
 

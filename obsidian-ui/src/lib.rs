@@ -14,10 +14,11 @@ use log::{info, warn};
 use obsidian_core::{
     go_back as core_go_back, go_forward as core_go_forward, navigate as core_navigate,
     reload as core_reload, resize_browser as core_resize_browser,
+    show_dev_tools as core_show_dev_tools,
 };
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::os::raw::c_void;
-use winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
+use winit::dpi::{LogicalSize, PhysicalPosition};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoop;
 use winit::window::{Window, WindowAttributes};
@@ -199,15 +200,21 @@ pub fn run_event_loop(
 }
 
 /// Set up Slint UI rendering inside the winit window and wire up the
-/// navigation callbacks to `obsidian-core` functions.
-fn setup_slint_ui(_window: &Window, hwnd: *mut c_void) {
+/// navigation and window-control callbacks to `obsidian-core` / `winit`.
+fn setup_slint_ui(window: &Window, hwnd: *mut c_void) {
     // Slint integrates with winit via `slint::platform::winit::WindowAdapter`:
     //
     // use slint::platform::winit::WindowAdapter;
     // let adapter = WindowAdapter::new(window, event_loop.create_proxy(), false);
     // let ui = MainWindow::new();
     //
-    // Wire the Slint request_navigation callback:
+    // Wire the window_drag_requested callback to winit's drag_window():
+    //
+    // ui.on_window_drag_requested(move || {
+    //     let _ = window.drag_window();
+    // });
+    //
+    // Wire the request_navigation callback:
     //
     // ui.on_request_navigation(move |url: slint::SharedString| {
     //     let url_str = url.trim();
@@ -235,6 +242,12 @@ fn setup_slint_ui(_window: &Window, hwnd: *mut c_void) {
     //     let _ = core_reload(hwnd);
     // });
     //
+    // Wire the DevTools callback:
+    //
+    // ui.on_request_devtools(move || {
+    //     let _ = core_show_dev_tools(hwnd);
+    // });
+    //
     // ui.show_with_adapter(adapter);
     //
     // The MainWindow component is generated from src/ui/main.slint via
@@ -242,6 +255,8 @@ fn setup_slint_ui(_window: &Window, hwnd: *mut c_void) {
     //
     // This wiring is scaffolding; the adapter will be connected once
     // slint-platform-winit integration is fully configured.
+    let _ = window;
+    let _ = hwnd;
     warn!("Slint UI rendering is scaffolding; wire up WindowAdapter next.");
 }
 

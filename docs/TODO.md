@@ -10,7 +10,8 @@
 | 2.5 | CEF ↔ UI Bridge | ✅ Complete |
 | 3 | Live Engine Integration | ✅ Complete |
 | 3.5 | UI Controls ↔ CEF Navigation | ✅ Complete |
-| 3.7 | Viewport Constraints & Navigation Controls | 🚧 In progress |
+| 3.7 | Viewport Constraints & Navigation Controls | ✅ Complete |
+| 3.9 | Window Dragging & Developer Tools | 🚧 In progress |
 
 ---
 
@@ -177,6 +178,34 @@ controls.
 * [ ] Off-screen rendering (OSR) → Slint texture composition
 * [ ] Address bar updates on page load / navigation events
 * [ ] Search engine fallback for non-URL queries
+
+---
+
+## Phase 3.9 — Window Dragging & Developer Tools
+
+Goal: Enable window dragging on the borderless compact title bar and expose
+Chromium Developer Tools for debugging rendered content.
+
+### Immediate next steps
+
+* [x] `obsidian-ui/src/ui/main.slint` — compact top bar wrapped in `TouchArea`
+    with `window_drag_requested()` callback triggered on pointer press
+* [x] `obsidian-ui/src/ui/main.slint` — `[D]` DevTools button added with
+    `request_devtools()` callback (F12 listener as alternative)
+* [x] `obsidian_ui::setup_slint_ui()` maps `window_drag_requested` to
+    `window.drag_window()` on the winit `Window`
+* [x] `obsidian_ui::setup_slint_ui()` maps `request_devtools` to
+    `obsidian_core::show_dev_tools(hwnd)`
+* [x] `obsidian_core::show_dev_tools(hwnd)` — finds active `BrowserHost`,
+    configures an empty `WindowInfo` (spawns DevTools in native OS popup),
+    calls `browser_host.show_dev_tools()`
+
+### Longer-term Phase 3.9 goals
+
+* [ ] Window drag constraints (snap to screen edges)
+* [ ] DevTools docking / positioning control
+* [ ] Keyboard shortcuts (F12, Ctrl+Shift+I) for DevTools toggle
+* [ ] Custom DevTools theme integration
 
 ---
 
