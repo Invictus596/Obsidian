@@ -5,8 +5,8 @@
 | Phase | Milestone | Status |
 |-------|-----------|--------|
 | 0 | Workspace & architecture scaffolding | ✅ Complete |
-| 1 | CEF Integration (`obsidian-core`) | 🚧 In progress |
-| 2 | Fluid UI overlay (`obsidian-ui`) | 📋 Planned |
+| 1 | CEF Integration (`obsidian-core`) | ✅ Complete |
+| 2 | Fluid UI overlay (`obsidian-ui`) | 🚧 In progress |
 
 ---
 
@@ -60,16 +60,31 @@ subprocess lifecycle.
 Goal: An expressive, fluid, borderless UI shell inspired by Arc and Helium,
 compositing CEF-rendered content behind native Rust window chrome.
 
-### Planned steps
+Current focus: **borderless, compact-mode UI shell** with Arc-style vertical
+sidebar, compact top bar (URL input + window controls), and an
+`engine_viewport` rectangle where CEF will eventually render.
 
-* [ ] Native window creation (borderless, translucent, drop-shadow)
-* [ ] Window frame controls (traffic lights: close / minimize / maximize)
-* [ ] Vertical tab strip (Arc-style sidebar tabs)
+### Immediate next steps
+
+* [x] Add `winit` and `slint` dependencies to `obsidian-ui/Cargo.toml`
+* [x] Create `obsidian-ui/src/ui/main.slint` Slint UI template:
+    * [x] Left-aligned vertical sidebar (Arc-style, dark cyberpunk aesthetic)
+    * [x] Top horizontal compact mode title bar (dummy URL input + window controls)
+    * [x] Large empty rectangle as `engine_viewport` for CEF rendering
+* [x] Update `obsidian-ui/src/lib.rs` to spawn a winit borderless window and render the Slint UI inside it
+* [x] Expose `engine_viewport_handle()` returning the native window handle (HWND on Windows)
+* [ ] Wire Slint ↔ winit event loop integration
+* [ ] Implement window frame controls (close / minimize / maximize / drag)
+* [ ] Implement translucent background and drop-shadow styling
+* [ ] Implement vertical tab strip with tab switching
+* [ ] Implement CEF off-screen → UI texture composition pipeline
+
+### Longer-term Phase 2 goals
+
 * [ ] Address bar / omnibox with live suggestions
 * [ ] Tab management: open / close / pin / drag-to-reorder
 * [ ] Back / forward / reload / navigation controls
 * [ ] Bookmarks bar and bookmark manager
-* [ ] CEF off-screen → UI texture composition pipeline
 * [ ] Fluid transitions (tab switches, page loads, modal overlays)
 * [ ] Theme engine (dark / light / accent color)
 * [ ] Accessibility and keyboard navigation

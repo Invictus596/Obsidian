@@ -10,3 +10,16 @@ path = "src/lib.rs"
 [dependencies]
 log = "0.4"
 thiserror = "1.0"
+
+# Cross-platform window management (borderless, translucent, etc.)
+winit = { version = "0.30", features = ["rwh_06"] }
+
+# Declarative UI toolkit for the fluid Arc/Helium-inspired shell
+slint = { version = "1.6", features = ["backend-winit"] }
+
+# Raw window handle access (HWND on Windows) for CEF viewport attachment
+raw-window-handle = "0.6"
+
+[build-dependencies]
+# Compiles .slint UI templates at build time
+slint-build = "1.6"

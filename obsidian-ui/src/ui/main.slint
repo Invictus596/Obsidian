@@ -1,0 +1,132 @@
+//! `obsidian-ui/src/ui/main.slint` — Slint UI template for the Obsidian shell.
+//!
+//! Defines a borderless, compact-mode window with:
+//!   * A left-aligned vertical sidebar (Arc-style, dark cyberpunk aesthetic)
+//!   * A top horizontal compact mode title bar (dummy URL input + window controls)
+//!   * A large empty rectangle as `engine_viewport` where CEF will eventually render
+//!
+//! This is Phase 2 scaffolding. The Slint template is compiled at build time
+//! via `slint-build` and rendered inside a winit window from `lib.rs`.
+
+import { VerticalBox, HorizontalBox, LineEdit, Rectangle, Text, Button } from "std-widgets.slint";
+
+export component MainWindow inherits Window {
+    title: "Obsidian";
+    width: 1200px;
+    height: 800px;
+    background: #050508;
+
+    // -----------------------------------------------------------------------
+    // Top compact mode title bar
+    // -----------------------------------------------------------------------
+    HorizontalBox {
+        background: #0a0a0f;
+        spacing: 8px;
+        padding: 8px;
+
+        // Dummy URL input (compact mode)
+        LineEdit {
+            text: "https://obsidian.dev";
+            width: 600px;
+            height: 28px;
+        }
+
+        // Spacer pushes window controls to the right
+        HorizontalBox {
+            width: 1fr;
+        }
+
+        // Window controls (traffic-light style)
+        Button {
+            text: "—";
+            width: 36px;
+            height: 24px;
+            background: #1a1a2e;
+            color: #ccccdd;
+            clicked => { /* minimize */ }
+        }
+        Button {
+            text: "□";
+            width: 36px;
+            height: 24px;
+            background: #1a1a2e;
+            color: #ccccdd;
+            clicked => { /* maximize / restore */ }
+        }
+        Button {
+            text: "✕";
+            width: 36px;
+            height: 24px;
+            background: #2a1a1e;
+            color: #ff6b6b;
+            clicked => { window.close(); }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Main content area: sidebar + engine viewport
+    // -----------------------------------------------------------------------
+    HorizontalBox {
+        width: 1fr;
+        height: 1fr;
+
+        // Left-aligned vertical sidebar (Arc-style)
+        Rectangle {
+            background: #0d0d15;
+            width: 260px;
+
+            VerticalBox {
+                spacing: 16px;
+                padding: 20px;
+
+                // Brand
+                Text {
+                    text: "OBSIDIAN";
+                    color: #00d4ff;
+                    font-size: 20px;
+                    font-weight: bold;
+                }
+
+                // Vertical tab strip placeholders (Arc-style)
+                Rectangle {
+                    background: #141420;
+                    width: 48px;
+                    height: 48px;
+                }
+
+                Rectangle {
+                    background: #141420;
+                    width: 48px;
+                    height: 48px;
+                }
+
+                Rectangle {
+                    background: #141420;
+                    width: 48px;
+                    height: 48px;
+                }
+
+                Rectangle {
+                    background: #141420;
+                    width: 48px;
+                    height: 48px;
+                }
+
+                // New tab / plus button
+                Text {
+                    text: "+";
+                    color: #666677;
+                    font-size: 24px;
+                }
+            }
+        }
+
+        // Engine viewport — CEF will eventually render into this rectangle
+        Rectangle {
+            id: engine_viewport;
+            background: #050508;
+            width: 1fr;
+            height: 1fr;
+        }
+    }
+}
