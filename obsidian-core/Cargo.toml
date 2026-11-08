@@ -16,6 +16,13 @@ thiserror = "1.0"
 # discovered via build.rs (CEF_ROOT env var or default cef_binary/ folder).
 cef = { version = "156", optional = true }
 
+# Win32 API for SetWindowPos (CEF viewport constraint).
+windows-sys = { version = "0.52", optional = true, features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [features]
 default = []
 cef-bindings = ["dep:cef"]
+win32 = ["dep:windows-sys"]

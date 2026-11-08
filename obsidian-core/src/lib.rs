@@ -22,6 +22,13 @@
 
 use std::path::PathBuf;
 
+#[cfg(feature = "win32")]
+use windows_sys::Win32::Foundation::HWND;
+#[cfg(feature = "win32")]
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    SetWindowPos, SWP_NOZORDER, SWP_NOACTIVATE,
+};
+
 /// Initialize the Obsidian browser engine core.
 ///
 /// With the `cef-bindings` feature enabled this function:
@@ -141,26 +148,150 @@ pub fn navigate(hwnd: *mut std::ffi::c_void, url: &str) -> Result<(), EngineInit
     }
 }
 
+/// Navigate the CEF browser back one entry in history.
+///
+/// * `hwnd` — native window handle (HWND on Windows) the browser is attached to.
+///
+/// Without the feature this logs a dummy message and returns `Ok(())`.
+pub fn go_back(hwnd: *mut std::ffi::c_void) -> Result<(), EngineInitError> {
+    log::info!("Navigating CEF browser back at HWND: {:?}", hwnd);
+
+    #[cfg(feature = "cef-bindings")]
+    {
+        use cef::BrowserHost;
+
+        match BrowserHost::get_browser_for_window(hwnd as _) {
+            Some(browser) => {
+                browser.go_back().map_err(|e| {
+                    log::error!("Failed to go back: {}", e);
+                    EngineInitError::CefInitializationFailed(e.to_string())
+                })?;
+                log::info!("CEF browser navigated back.");
+            }
+            None => {
+                log::warn!(
+                    "No active CEF browser host found for HWND: {:?}; cannot go back.",
+                    hwnd
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(feature = "cef-bindings"))]
+    {
+        log::info!("CEF bindings disabled: dummy go_back placeholder. HWND: {:?}", hwnd);
+        Ok(())
+    }
+}
+
+/// Navigate the CEF browser forward one entry in history.
+///
+/// * `hwnd` — native window handle (HWND on Windows) the browser is attached to.
+///
+/// Without the feature this logs a dummy message and returns `Ok(())`.
+pub fn go_forward(hwnd: *mut std::ffi::c_void) -> Result<(), EngineInitError> {
+    log::info!("Navigating CEF browser forward at HWND: {:?}", hwnd);
+
+    #[cfg(feature = "cef-bindings")]
+    {
+        use cef::BrowserHost;
+
+        match BrowserHost::get_browser_for_window(hwnd as _) {
+            Some(browser) => {
+                browser.go_forward().map_err(|e| {
+                    log::error!("Failed to go forward: {}", e);
+                    EngineInitError::CefInitializationFailed(e.to_string())
+                })?;
+                log::info!("CEF browser navigated forward.");
+            }
+            None => {
+                log::warn!(
+                    "No active CEF browser host found for HWND: {:?}; cannot go forward.",
+                    hwnd
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(feature = "cef-bindings"))]
+    {
+        log::info!(
+            "CEF bindings disabled: dummy go_forward placeholder. HWND: {:?}",
+            hwnd
+        );
+        Ok(())
+    }
+}
+
+/// Reload the current page in the CEF browser.
+///
+/// * `hwnd` — native window handle (HWND on Windows) the browser is attached to.
+///
+/// Without the feature this logs a dummy message and returns `Ok(())`.
+pub fn reload(hwnd: *mut std::ffi::c_void) -> Result<(), EngineInitError> {
+    log::info!("Reloading CEF browser at HWND: {:?}", hwnd);
+
+    #[cfg(feature = "cef-bindings")]
+    {
+        use cef::BrowserHost;
+
+        match BrowserHost::get_browser_for_window(hwnd as _) {
+            Some(browser) => {
+                browser.reload().map_err(|e| {
+                    log::error!("Failed to reload: {}", e);
+                    EngineInitError::CefInitializationFailed(e.to_string())
+                })?;
+                log::info!("CEF browser reloaded.");
+            }
+            None => {
+                log::warn!(
+                    "No active CEF browser host found for HWND: {:?}; cannot reload.",
+                    hwnd
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(feature = "cef-bindings"))]
+    {
+        log::info!("CEF bindings disabled: dummy reload placeholder. HWND: {:?}", hwnd);
+        Ok(())
+    }
+}
+
 /// Resize a CEF browser that was previously attached to a native window handle.
 ///
 /// * `hwnd` — native window handle (HWND on Windows) the browser is attached to.
+/// * `x` — absolute X coordinate of the viewport.
+/// * `y` — absolute Y coordinate of the viewport.
 /// * `width` — new width in pixels.
 /// * `height` — new height in pixels.
 ///
 /// With `cef-bindings` enabled this looks up the active CEF browser host
-/// associated with `hwnd` and calls `was_resized()` so CEF repaints at the
-/// new dimensions. Falls back to a Win32 `SetWindowPos` bounds update if the
-/// browser host can't be resolved.
+/// associated with `hwnd`, gets its window handle via `get_window_handle`,
+/// and calls Win32 `SetWindowPos` to explicitly move/resize the CEF child
+/// window so it perfectly maps to the Slint `engine_viewport` coordinates.
+/// Falls back to `was_resized()` if the child window handle can't be resolved.
 ///
 /// Without the feature this logs a dummy message and returns `Ok(())`.
 pub fn resize_browser(
     hwnd: *mut std::ffi::c_void,
-    width: u32,
-    height: u32,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
 ) -> Result<(), EngineInitError> {
     log::info!(
-        "Resizing CEF browser at HWND: {:?} to {}x{}",
+        "Resizing CEF browser at HWND: {:?} to ({}, {}) {}x{}",
         hwnd,
+        x,
+        y,
         width,
         height
     );
@@ -169,23 +300,46 @@ pub fn resize_browser(
     {
         use cef::BrowserHost;
 
-        // Look up the active browser host for this window and notify it of
-        // the resize. The `cef` crate may expose browser host lookup via
-        // `BrowserHost::get_browser_for_window` or equivalent.
         match BrowserHost::get_browser_for_window(hwnd as _) {
             Some(browser) => {
-                browser.was_resized().map_err(|e| {
-                    log::error!("Failed to resize CEF browser: {}", e);
-                    EngineInitError::CefInitializationFailed(e.to_string())
-                })?;
+                // Get the CEF child window handle and explicitly set its
+                // position/size via Win32 SetWindowPos so it maps exactly
+                // to the Slint engine_viewport rectangle.
+                if let Ok(cef_window_handle) = browser.get_window_handle() {
+                    let cef_hwnd: HWND = cef_window_handle as _;
+                    unsafe {
+                        SetWindowPos(
+                            cef_hwnd,
+                            0,
+                            x,
+                            y,
+                            width,
+                            height,
+                            SWP_NOZORDER | SWP_NOACTIVATE,
+                        );
+                    }
+                    log::info!(
+                        "CEF child window positioned via SetWindowPos at ({}, {}) {}x{}",
+                        x,
+                        y,
+                        width,
+                        height
+                    );
+                } else {
+                    // Fallback: just notify CEF of the resize.
+                    browser.was_resized().map_err(|e| {
+                        log::error!("Failed to resize CEF browser: {}", e);
+                        EngineInitError::CefInitializationFailed(e.to_string())
+                    })?;
+                }
             }
             None => {
                 // Fallback: notify via Win32 that the window bounds changed.
                 unsafe {
-                    let _ = std::mem::transmute::<_, _>(hwnd);
+                    let parent_hwnd: HWND = hwnd as _;
                     log::warn!(
-                        "No active CEF browser host found for HWND: {:?}; resize hint sent.",
-                        hwnd
+                        "No active CEF browser host found for HWND: {:?}; resize hint sent to parent.",
+                        parent_hwnd
                     );
                 }
             }
@@ -198,8 +352,10 @@ pub fn resize_browser(
     #[cfg(not(feature = "cef-bindings"))]
     {
         log::info!(
-            "CEF bindings disabled: dummy resize placeholder. HWND: {:?}, {}x{}",
+            "CEF bindings disabled: dummy resize placeholder. HWND: {:?}, ({}, {}) {}x{}",
             hwnd,
+            x,
+            y,
             width,
             height
         );

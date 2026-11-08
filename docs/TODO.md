@@ -9,7 +9,8 @@
 | 2 | Fluid UI overlay (`obsidian-ui`) | ✅ Complete |
 | 2.5 | CEF ↔ UI Bridge | ✅ Complete |
 | 3 | Live Engine Integration | ✅ Complete |
-| 3.5 | UI Controls ↔ CEF Navigation | 🚧 In progress |
+| 3.5 | UI Controls ↔ CEF Navigation | ✅ Complete |
+| 3.7 | Viewport Constraints & Navigation Controls | 🚧 In progress |
 
 ---
 
@@ -138,11 +139,44 @@ browser instance.
 
 ### Longer-term Phase 3.5 goals
 
-* [ ] Back / forward / reload buttons wired to CEF frame navigation
+* [x] Back / forward / reload buttons wired to CEF frame navigation
 * [ ] Address bar updates on page load / navigation events
 * [ ] Search engine fallback for non-URL queries
 * [ ] Bookmark bar and bookmark management
 * [ ] Tab-specific URL bars
+
+---
+
+## Phase 3.7 — Viewport Constraints & Navigation Controls
+
+Goal: Constrain the CEF browser viewport to precisely match the Slint
+`engine_viewport` rectangle coordinates, and wire Back / Forward / Reload
+controls.
+
+### Immediate next steps
+
+* [x] `obsidian_core::resize_browser(hwnd, x, y, width, height)` — updated to
+    accept absolute coordinates and call Win32 `SetWindowPos` on the CEF child
+    window
+* [x] `obsidian_core::go_back(hwnd)`, `go_forward(hwnd)`, `reload(hwnd)` —
+    call respective CEF browser navigation methods
+* [x] `obsidian-ui/src/ui/main.slint` — Back `[<]`, Forward `[>]`, Reload `[C]`
+    buttons added to top bar with `request_back()`, `request_forward()`,
+    `request_reload()` callbacks
+* [x] `obsidian-ui/src/ui/main.slint` — `engine_viewport` exposes absolute
+    `x`, `y`, `width`, `height` properties to Rust
+* [x] Resize event handler fetches `engine_viewport` geometry and passes it to
+    `obsidian_core::resize_browser()`
+* [x] Slint navigation callbacks wired to `obsidian_core` functions with HWND
+* [x] `windows-sys` crate added to `obsidian-core/Cargo.toml` with
+    `Win32_UI_WindowsAndMessaging` and `Win32_Foundation` features
+
+### Longer-term Phase 3.7 goals
+
+* [ ] Parent/clip CEF browser to the `engine_viewport` rectangle
+* [ ] Off-screen rendering (OSR) → Slint texture composition
+* [ ] Address bar updates on page load / navigation events
+* [ ] Search engine fallback for non-URL queries
 
 ---
 

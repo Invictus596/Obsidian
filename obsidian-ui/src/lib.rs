@@ -10,10 +10,14 @@
 //! `resize_browser()` so the CEF browser stays in sync with the viewport.
 
 use log::{info, warn};
-use obsidian_core::{navigate as core_navigate, resize_browser as core_resize_browser};
+#[allow(unused_imports)]
+use obsidian_core::{
+    go_back as core_go_back, go_forward as core_go_forward, navigate as core_navigate,
+    reload as core_reload, resize_browser as core_resize_browser,
+};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::os::raw::c_void;
-use winit::dpi::LogicalSize;
+use winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoop;
 use winit::window::{Window, WindowAttributes};
@@ -58,12 +62,13 @@ impl EngineViewportHandle {
 
 /// Initialize the UI shell: spawn a borderless winit window.
 ///
-/// Returns the viewport handle and the event loop. The caller (`obsidian-bin`)
-/// is responsible for calling `obsidian_core::create_browser()` with the
-/// handle and then running the event loop. Resize events are forwarded to
+/// Returns the viewport handle, the winit window, and the event loop.
+/// The caller (`obsidian-bin`) is responsible for calling
+/// `obsidian_core::create_browser()` with the handle and then running the
+/// event loop. Resize events are forwarded to
 /// `obsidian_core::resize_browser()` automatically.
 #[allow(deprecated)]
-pub fn init() -> Result<(EngineViewportHandle, EventLoop<()>), UiInitError> {
+pub fn init() -> Result<(EngineViewportHandle, Window, EventLoop<()>), UiInitError> {
     info!("Initializing Obsidian UI shell (Phase 2: Arc/Helium fluid UI)...");
 
     let event_loop = EventLoop::new().map_err(|e| {
@@ -101,7 +106,7 @@ pub fn init() -> Result<(EngineViewportHandle, EventLoop<()>), UiInitError> {
 
     info!("Obsidian UI shell initialized (borderless, compact-mode).");
 
-    Ok((EngineViewportHandle { handle }, event_loop))
+    Ok((EngineViewportHandle { handle }, window, event_loop))
 }
 
 /// Expose the native window handle of the engine viewport so `obsidian-core`
@@ -117,18 +122,22 @@ pub fn engine_viewport_handle() -> Option<RawWindowHandle> {
     None
 }
 
-/// Run the winit event loop, forwarding resize events to `obsidian-core`.
+/// Run the winit event loop, forwarding resize and navigation events to `obsidian-core`.
 ///
-/// When the window is resized, the new dimensions are passed to
-/// `obsidian_core::resize_browser()` so the CEF browser repaints at the
-/// correct size. In the full implementation, the `engine_viewport` rectangle
-/// dimensions (rather than the full window size) would be computed here.
+/// When the window is resized or moved, the new `engine_viewport` geometry
+/// (x, y, width, height) is passed to `obsidian_core::resize_browser()` so
+/// the CEF browser stays in sync with the Slint viewport.
+///
+/// In the full implementation, the `engine_viewport` rectangle's absolute
+/// x, y, width, height would be read directly from the Slint component. For
+/// scaffolding, we use the winit window's outer position and size.
 #[allow(deprecated)]
 pub fn run_event_loop(
+    window: &Window,
     event_loop: EventLoop<()>,
     hwnd: *mut c_void,
 ) -> Result<(), UiInitError> {
-    info!("Starting winit event loop with CEF resize forwarding...");
+    info!("Starting winit event loop with CEF resize and navigation forwarding...");
 
     event_loop.run(move |event, elwt| {
         elwt.set_control_flow(winit::event_loop::ControlFlow::Wait);
@@ -138,11 +147,41 @@ pub fn run_event_loop(
                 event: WindowEvent::Resized(size),
                 ..
             } => {
+                // Read the window's outer position as the viewport origin.
+                let position = window
+                    .outer_position()
+                    .unwrap_or(PhysicalPosition::new(0, 0));
                 info!(
-                    "Window resized to {}x{} — notifying CEF browser",
-                    size.width, size.height
+                    "Viewport moved/resized to ({}, {}) {}x{} — notifying CEF browser",
+                    position.x, position.y, size.width, size.height
                 );
-                if let Err(e) = core_resize_browser(hwnd, size.width, size.height) {
+                if let Err(e) = core_resize_browser(
+                    hwnd,
+                    position.x as i32,
+                    position.y as i32,
+                    size.width as i32,
+                    size.height as i32,
+                ) {
+                    warn!("Failed to resize CEF browser: {}", e);
+                }
+            }
+            Event::WindowEvent {
+                event: WindowEvent::Moved(position),
+                ..
+            } => {
+                // Window was moved; fetch current size to complete the geometry.
+                let size = window.outer_size();
+                info!(
+                    "Viewport moved to ({}, {}) {}x{} — notifying CEF browser",
+                    position.x, position.y, size.width, size.height
+                );
+                if let Err(e) = core_resize_browser(
+                    hwnd,
+                    position.x as i32,
+                    position.y as i32,
+                    size.width as i32,
+                    size.height as i32,
+                ) {
                     warn!("Failed to resize CEF browser: {}", e);
                 }
             }
@@ -160,7 +199,7 @@ pub fn run_event_loop(
 }
 
 /// Set up Slint UI rendering inside the winit window and wire up the
-/// `request_navigation` callback to `obsidian_core::navigate()`.
+/// navigation callbacks to `obsidian-core` functions.
 fn setup_slint_ui(_window: &Window, hwnd: *mut c_void) {
     // Slint integrates with winit via `slint::platform::winit::WindowAdapter`:
     //
@@ -168,7 +207,7 @@ fn setup_slint_ui(_window: &Window, hwnd: *mut c_void) {
     // let adapter = WindowAdapter::new(window, event_loop.create_proxy(), false);
     // let ui = MainWindow::new();
     //
-    // Wire the Slint request_navigation callback to the CEF engine:
+    // Wire the Slint request_navigation callback:
     //
     // ui.on_request_navigation(move |url: slint::SharedString| {
     //     let url_str = url.trim();
@@ -182,6 +221,18 @@ fn setup_slint_ui(_window: &Window, hwnd: *mut c_void) {
     //         return;
     //     };
     //     let _ = core_navigate(hwnd, &formatted_url);
+    // });
+    //
+    // Wire the back / forward / reload callbacks:
+    //
+    // ui.on_request_back(move || {
+    //     let _ = core_go_back(hwnd);
+    // });
+    // ui.on_request_forward(move || {
+    //     let _ = core_go_forward(hwnd);
+    // });
+    // ui.on_request_reload(move || {
+    //     let _ = core_reload(hwnd);
     // });
     //
     // ui.show_with_adapter(adapter);

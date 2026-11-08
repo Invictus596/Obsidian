@@ -17,14 +17,43 @@ export component MainWindow inherits Window {
     background: #050508;
 
     callback request_navigation(string);
+    callback request_back();
+    callback request_forward();
+    callback request_reload();
 
     // -----------------------------------------------------------------------
     // Top compact mode title bar
     // -----------------------------------------------------------------------
     HorizontalBox {
         background: #0a0a0f;
-        spacing: 8px;
+        spacing: 4px;
         padding: 8px;
+
+        // Navigation controls: back, forward, reload
+        Button {
+            text: "[<]";
+            width: 32px;
+            height: 28px;
+            background: #1a1a2e;
+            color: #ccccdd;
+            clicked => { root.request_back(); }
+        }
+        Button {
+            text: "[>]";
+            width: 32px;
+            height: 28px;
+            background: #1a1a2e;
+            color: #ccccdd;
+            clicked => { root.request_forward(); }
+        }
+        Button {
+            text: "[C]";
+            width: 32px;
+            height: 28px;
+            background: #1a1a2e;
+            color: #ccccdd;
+            clicked => { root.request_reload(); }
+        }
 
         // URL input (compact mode)
         LineEdit {

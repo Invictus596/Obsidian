@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     })?;
 
     // Phase 2: initialize the UI shell (borderless winit window + Slint UI).
-    let (viewport, event_loop) = ui_init().map_err(|e| {
+    let (viewport, window, event_loop) = ui_init().map_err(|e| {
         log::error!("Failed to initialize UI shell: {}", e);
         e
     })?;
@@ -34,9 +34,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     log::info!("Obsidian is up and running.");
 
-    // Phase 3: start the UI event loop. Resize events are forwarded to
-    // obsidian_core::resize_browser() so the CEF browser stays in sync.
-    run_event_loop(event_loop, hwnd).map_err(|e| {
+    // Phase 3.7: start the UI event loop. Resize/move events are forwarded to
+    // obsidian_core::resize_browser() so the CEF browser stays in sync with
+    // the engine_viewport coordinates.
+    run_event_loop(&window, event_loop, hwnd).map_err(|e| {
         log::error!("Event loop failed: {}", e);
         e
     })?;
