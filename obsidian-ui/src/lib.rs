@@ -88,6 +88,7 @@ pub fn run_event_loop(
     window: &Window,
     event_loop: EventLoop<()>,
     webview: &BrowserEngine,
+    on_load_extension: impl Fn(&str) + Clone + 'static,
 ) -> Result<(), UiInitError> {
     info!("Starting winit event loop with WebView bounds forwarding...");
 
@@ -154,6 +155,7 @@ pub fn run_event_loop(
         }
     }).map_err(|e| UiInitError::EventLoopFailed(e.to_string()))?;
 
+    let _ = on_load_extension;
     Ok(())
 }
 

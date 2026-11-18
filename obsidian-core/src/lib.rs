@@ -3,16 +3,21 @@
 //! This crate is the low-level bridge between the Rust shell and the OS-native
 //! WebView via the `wry` crate (Edge WebView2 on Windows, WebKitGTK on Linux,
 //! Android WebView on mobile). It owns the WebView lifecycle, navigation,
-//! resizing, and JavaScript evaluation.
+//! resizing, JavaScript evaluation, and the custom Rust WebExtensions runtime.
 //!
 //! ## Status
 //!
-//! Phase 4.1 — wry OS-native WebView (~10MB target binary) paired with a
-//! custom Rust WebExtensions runtime.
+//! Phase 4.2 — Custom Rust WebExtensions runtime: Manifest V3 parser,
+//! `chrome.*` IPC polyfill, and content script injector.
+
+mod extensions;
+
+pub use extensions::{ExtensionManager, ExtensionManifest, LoadedExtension};
 
 use log::{error, info};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use winit::window::Window;
 use wry::Rect;
 
@@ -46,7 +51,8 @@ const LINK_PREVIEW_INIT_SCRIPT: &str = r#"
 
 /// Handle to an embedded OS-native WebView.
 pub struct BrowserEngine {
-    webview: wry::WebView,
+    webview: Arc<Mutex<Option<wry::WebView>>>,
+    extension_manager: Arc<Mutex<ExtensionManager>>,
 }
 
 impl BrowserEngine {
@@ -64,6 +70,12 @@ impl BrowserEngine {
             x, y, width, height
         );
 
+        let extension_manager = Arc::new(Mutex::new(ExtensionManager::new()));
+        let extension_manager_clone = extension_manager.clone();
+        let webview_ref: Arc<Mutex<Option<wry::WebView>>> =
+            Arc::new(Mutex::new(None));
+        let webview_ref_clone = webview_ref.clone();
+
         let bounds = Rect {
             position: wry::dpi::Position::Logical(
                 winit::dpi::LogicalPosition::new(x as f64, y as f64).into(),
@@ -73,23 +85,109 @@ impl BrowserEngine {
             ),
         };
 
+        // Generate the chrome.* IPC polyfill script.
+        let polyfill_script = extension_manager.lock().unwrap().generate_polyfill_script();
+
+        // Combined initialization script: link preview + chrome polyfill.
+        let init_script = format!("{}\n{}", LINK_PREVIEW_INIT_SCRIPT, polyfill_script);
+
         let webview = wry::WebViewBuilder::new()
             .with_bounds(bounds)
-            .with_initialization_script(LINK_PREVIEW_INIT_SCRIPT)
+            .with_initialization_script(&init_script)
+            .with_ipc_handler(move |request: wry::http::Request<String>| {
+                let msg = request.body();
+                let parsed: IpcMessage = match serde_json::from_str(msg) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        error!("Failed to parse IPC message: {}", e);
+                        return;
+                    }
+                };
+
+                match parsed.channel.as_str() {
+                    "link-hover" => {
+                        if let Some(href) = parsed.payload.get("href").and_then(|v| v.as_str()) {
+                            info!("Link hover: {}", href);
+                            if let Ok(guard) = webview_ref_clone.lock() {
+                                if let Some(wv) = guard.as_ref() {
+                                    let _ = wv.evaluate_script(&format!(
+                                        "window.__obsidianHoveredUrl = '{}';",
+                                        href.replace("'", "\\'")
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    "link-leave" => {
+                        if let Ok(guard) = webview_ref_clone.lock() {
+                            if let Some(wv) = guard.as_ref() {
+                                let _ = wv.evaluate_script("window.__obsidianHoveredUrl = '';");
+                            }
+                        }
+                    }
+                    "chrome_api" => {
+                        let message = parsed.payload.clone();
+                        let mut em_guard = extension_manager_clone.lock().unwrap();
+                        let response = em_guard.handle_chrome_api(message);
+                        drop(em_guard);
+
+                        let call_id = parsed.payload
+                            .get("callId")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        if let Ok(guard) = webview_ref_clone.lock() {
+                            if let Some(wv) = guard.as_ref() {
+                                let result_json = serde_json::to_string(
+                                    &response.get("result").cloned().unwrap_or(serde_json::Value::Null)
+                                ).unwrap_or("null".to_string());
+                                let _ = wv.evaluate_script(&format!(
+                                    "window.__chromeResponse('{}', {}, {});",
+                                    call_id.replace("'", "\\'"),
+                                    response.get("ok").and_then(|v| v.as_bool()).unwrap_or(false),
+                                    result_json
+                                ));
+                            }
+                        }
+                    }
+                    _ => {
+                        error!("Unknown IPC channel: {}", parsed.channel);
+                    }
+                }
+            })
             .build_as_child(window)
             .map_err(|e| {
                 error!("Failed to create wry WebView: {}", e);
                 EngineInitError::WebViewCreationFailed(e.to_string())
             })?;
 
+        // Store the webview in the shared ref so the IPC handler can access it.
+        *webview_ref.lock().unwrap() = Some(webview);
+
         info!("wry WebView created successfully.");
-        Ok(Self { webview })
+        Ok(Self {
+            webview: webview_ref,
+            extension_manager,
+        })
+    }
+
+    /// Load an unpacked extension from a directory.
+    pub fn load_extension(&self, path: &Path) -> Result<String, String> {
+        let ext = self
+            .extension_manager
+            .lock()
+            .unwrap()
+            .load_unpacked(path)?;
+        Ok(format!("Loaded extension '{}' (id: {})", ext.manifest.name, ext.extension_id))
     }
 
     /// Navigate the WebView to a URL.
     pub fn navigate(&self, url: &str) -> Result<(), EngineInitError> {
         info!("Navigating WebView to {}", url);
         self.webview
+            .lock()
+            .unwrap()
+            .as_mut()
+            .unwrap()
             .load_url(url)
             .map_err(|e| {
                 error!("Failed to load URL: {}", e);
@@ -116,6 +214,10 @@ impl BrowserEngine {
             ),
         };
         self.webview
+            .lock()
+            .unwrap()
+            .as_mut()
+            .unwrap()
             .set_bounds(bounds)
             .map_err(|e| {
                 error!("Failed to resize WebView: {}", e);
@@ -129,6 +231,10 @@ impl BrowserEngine {
     pub fn eval(&self, js: &str) -> Result<(), EngineInitError> {
         info!("Evaluating JS: {}", js);
         self.webview
+            .lock()
+            .unwrap()
+            .as_mut()
+            .unwrap()
             .evaluate_script(js)
             .map_err(|e| {
                 error!("Failed to eval JS: {}", e);
@@ -150,6 +256,11 @@ impl BrowserEngine {
     /// Reload the current page.
     pub fn reload(&self) -> Result<(), EngineInitError> {
         self.eval("location.reload()")
+    }
+
+    /// Get a reference to the extension manager (for querying scripts, etc.).
+    pub fn extension_manager(&self) -> Arc<Mutex<ExtensionManager>> {
+        self.extension_manager.clone()
     }
 }
 

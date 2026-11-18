@@ -12,8 +12,8 @@
 | 3.5 | UI Controls ↔ CEF Navigation | ✅ Superseded — wry IPC replaces CEF bridge |
 | 3.7 | Viewport Constraints & Navigation Controls | ✅ Superseded — wry `set_bounds()` replaces SetWindowPos |
 | 3.9 | Window Dragging & Developer Tools | ✅ Superseded — wry DevTools via `eval()` / native popup |
-| 4 | Extension Loader Architecture | ✅ Superseded — replaced by Rust WebExtensions runtime |
-| 4.1 | wry OS-native WebView + Custom Rust WebExtensions Runtime | 🚧 In progress |
+| 4.1 | wry OS-native WebView + Ultra-compact Slint UI | ✅ Complete |
+| 4.2 | Custom Rust WebExtensions Runtime | 🚧 In progress |
 
 ---
 
@@ -251,6 +251,44 @@ compact layout.
 * [ ] Floating link preview pill rendering from IPC messages
 * [ ] Off-screen rendering (OSR) → Slint texture composition
 * [ ] Multi-window / split-view support
+
+---
+
+## Phase 4.2 — Custom Rust WebExtensions Runtime
+
+Goal: Build a Manifest V3 extension runtime inside `obsidian-core` that parses
+extension manifests, injects a `chrome.*` IPC polyfill into every page, and
+injects content scripts into matching URLs.
+
+### Immediate next steps
+
+* [x] `obsidian-core/src/extensions.rs` — new module with:
+    * [x] `ExtensionManifest` serde struct (Manifest V3 fields: manifest_version,
+        name, version, description, permissions, content_scripts, background)
+    * [x] `ContentScriptRule` struct (matches, js, css, run_at)
+    * [x] `ExtensionManager` struct (HashMap<String, LoadedExtension>,
+        per-extension storage, load_unpacked, generate_polyfill_script,
+        scripts_for_url)
+* [x] `obsidian-core/src/lib.rs` — declare `pub mod extensions;` and update
+    `BrowserEngine`:
+    * [x] Hold `Arc<Mutex<ExtensionManager>>`
+    * [x] IPC handler distinguishes `link_hover` vs `chrome_api` messages
+    * [x] Inject polyfill script via `with_initialization_script`
+    * [x] `pub fn load_extension(&self, path: &Path) -> Result<String, String>`
+* [x] `tests/dummy_extension/` — real Manifest V3 test extension:
+    * [x] `manifest.json` (manifest_version 3, name, version, content_scripts
+        matching `<all_urls>`)
+    * [x] `content.js` — tests `chrome.storage.local.set` / `get` and logs result
+* [x] `obsidian-ui` — `[Ext]` button loads `tests/dummy_extension` via
+    `BrowserEngine::load_extension`, reloads page, logs extension name
+
+### Longer-term Phase 4.2 goals
+
+* [ ] Extension management UI (enable/disable, uninstall)
+* [ ] Extension permission prompts and policy
+* [ ] Extension icon toolbar integration
+* [ ] Extension storage persistence to disk
+* [ ] Multi-extension isolation / per-extension storage keyspaces
 
 ---
 

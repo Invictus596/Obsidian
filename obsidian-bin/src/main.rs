@@ -1,5 +1,6 @@
 use obsidian_core::BrowserEngine;
 use obsidian_ui::{init as ui_init, run_event_loop};
+use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging. RUST_LOG controls verbosity (e.g. `RUST_LOG=debug`).
@@ -37,11 +38,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         e
     })?;
 
+    // Phase 4.2: Load the dummy test extension.
+    let ext_path = Path::new("tests/dummy_extension");
+    let ext_info = webview.load_extension(ext_path).map_err(|e| {
+        log::error!("Failed to load extension: {}", e);
+        e
+    })?;
+    log::info!("{}", ext_info);
+
+    // Reload the active page so the content script injects.
+    webview.reload().map_err(|e| {
+        log::error!("Failed to reload page: {}", e);
+        e
+    })?;
+    log::info!("Page reloaded — content scripts should now be injected.");
+
     log::info!("Obsidian is up and running.");
 
-    // Phase 4.1: start the UI event loop. Resize/move events are forwarded to
-    // the WebView's set_bounds() so it stays in sync with the viewport.
-    run_event_loop(&window, event_loop, &webview).map_err(|e| {
+    // Phase 4.1/4.2: start the UI event loop. Resize/move events are forwarded
+    // to the WebView's set_bounds() so it stays in sync with the viewport.
+    run_event_loop(
+        &window,
+        event_loop,
+        &webview,
+        |ext_path| {
+            log::info!("Extension load requested for: {}", ext_path);
+        },
+    )
+    .map_err(|e| {
         log::error!("Event loop failed: {}", e);
         e
     })?;
