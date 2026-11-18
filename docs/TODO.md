@@ -5,14 +5,15 @@
 | Phase | Milestone | Status |
 |-------|-----------|--------|
 | 0 | Workspace & architecture scaffolding | ✅ Complete |
-| 1 | CEF Integration (`obsidian-core`) | ✅ Complete |
-| 2 | Fluid UI overlay (`obsidian-ui`) | ✅ Complete |
-| 2.5 | CEF ↔ UI Bridge | ✅ Complete |
-| 3 | Live Engine Integration | ✅ Complete |
-| 3.5 | UI Controls ↔ CEF Navigation | ✅ Complete |
-| 3.7 | Viewport Constraints & Navigation Controls | ✅ Complete |
-| 3.9 | Window Dragging & Developer Tools | ✅ Complete |
-| 4 | Extension Loader Architecture | 🚧 In progress |
+| 1 | CEF Integration (`obsidian-core`) | ✅ Superseded — replaced by wry pivot |
+| 2 | Fluid UI overlay (`obsidian-ui`) | ✅ Superseded — ultra-compact UI |
+| 2.5 | CEF ↔ UI Bridge | ✅ Superseded — wry WebView handles embedding |
+| 3 | Live Engine Integration | ✅ Superseded — wry WebView natively embeds |
+| 3.5 | UI Controls ↔ CEF Navigation | ✅ Superseded — wry IPC replaces CEF bridge |
+| 3.7 | Viewport Constraints & Navigation Controls | ✅ Superseded — wry `set_bounds()` replaces SetWindowPos |
+| 3.9 | Window Dragging & Developer Tools | ✅ Superseded — wry DevTools via `eval()` / native popup |
+| 4 | Extension Loader Architecture | ✅ Superseded — replaced by Rust WebExtensions runtime |
+| 4.1 | wry OS-native WebView + Custom Rust WebExtensions Runtime | 🚧 In progress |
 
 ---
 
@@ -212,42 +213,48 @@ Chromium Developer Tools for debugging rendered content.
 
 ## Phase 4 — Extension Loader Architecture
 
-Goal: Support loading and managing Chromium extensions (Manifest V3) within
-Obsidian via the CEF Request Context.
+Status: ✅ Superseded — replaced by wry + Custom Rust WebExtensions runtime.
+
+---
+
+## Phase 4.1 — wry OS-native WebView (~10MB core) + Ultra-compact Slint UI
+
+Goal: Pivot `obsidian-core` away from heavy CEF binaries (~100MB+) to OS-native
+WebViews via the `wry` crate (~10MB target binary), paired with a custom Rust
+WebExtensions runtime. Upgrade `obsidian-ui` to an ultra-minimal single-row
+compact layout.
 
 ### Immediate next steps
 
-* [x] `tests/dummy_extension/manifest.json` — Manifest V3 extension
-    (name: "Obsidian Test Ext", version: "1.0", background service worker)
-* [x] `tests/dummy_extension/background.js` — dummy background script
-* [x] `obsidian_core::load_unpacked_extension(absolute_path)` — fetches the
-    global CEF Request Context and calls `load_extension()`
-* [x] `obsidian-ui/src/ui/main.slint` — `[Ext]` button added with
-    `request_load_extension()` callback
-* [x] `obsidian_ui::setup_slint_ui()` maps `request_load_extension` to
-    `obsidian_core::load_unpacked_extension(&path)` resolving the absolute
-    path to `tests/dummy_extension`
+* [x] Remove `obsidian-core/build.rs` and `scripts/download_cef.ps1`
+* [x] Replace `cef` + `windows-sys` dependencies with `wry = "0.47"`, `serde`, `serde_json`
+* [x] Refactor `obsidian-core/src/lib.rs` — `BrowserEngine` wrapping `wry::WebView`:
+    * [x] `BrowserEngine::new(&window, x, y, width, height)` — `WebViewBuilder::new_as_child()`
+    * [x] `navigate(&self, url: &str)` — `webview.load_url(url)`
+    * [x] `resize(&self, x, y, width, height)` — `webview.set_bounds()`
+    * [x] `eval(&self, js: &str)` — back/forward/reload via JS
+    * [x] `with_initialization_script` — `mouseover` on `<a>` → `window.ipc.postMessage(href)`
+* [x] `obsidian-ui/src/ui/main.slint` — ultra-minimal compact layout:
+    * [x] Single thin top chrome bar (36px height)
+    *   [x] Custom window controls, sidebar toggle, domain-only URL pill (expands on click)
+    *   [x] `<`, `>`, `↻`, `[Ext]` buttons
+    * [x] Collapsible left vertical sidebar (`sidebar_open`, 0px ↔ 220px)
+    * [x] Floating dark pill at bottom-left of `engine_viewport` bound to `hovered_url`
+* [x] `obsidian-ui/src/lib.rs` + `obsidian-bin/src/main.rs` — wire winit window, Slint UI, `wry::WebView` together; update WebView bounds on resize / sidebar toggle
 
-### Longer-term Phase 4 goals
+### Longer-term Phase 4.1 goals
 
+* [ ] Custom Rust WebExtensions runtime (manifest parsing, permission checks)
 * [ ] Extension management UI (enable/disable, uninstall)
-* [ ] Extension permission prompts and policy
 * [ ] Extension icon toolbar integration
 * [ ] Extension storage / messaging API support
+* [ ] Floating link preview pill rendering from IPC messages
+* [ ] Off-screen rendering (OSR) → Slint texture composition
+* [ ] Multi-window / split-view support
 
 ---
 
 ## Build & Runtime Requirements
-
-Pre-compiled CEF binaries are **required** to compile Phase 1. They are not
-checked into this repository.
-
-1. Run `scripts/download_cef.ps1` to fetch Windows x64 CEF binaries into
-   `cef_binary/`.
-2. Ensure `CEF_ROOT` points to the extraction folder, or accept the default
-   `cef_binary/` location.
-3. `cargo build` / `cargo run` — `build.rs` will emit the correct link/search
-   paths for the CEF Release binaries.
 
 ---
 

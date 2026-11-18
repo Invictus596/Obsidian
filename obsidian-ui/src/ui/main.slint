@@ -1,14 +1,15 @@
-//! `obsidian-ui/src/ui/main.slint` — Slint UI template for the Obsidian shell.
+//! `obsidian-ui/src/ui/main.slint` — Ultra-minimal compact Slint UI template.
 //!
-//! Defines a borderless, compact-mode window with:
-//!   * A left-aligned vertical sidebar (Arc-style, dark cyberpunk aesthetic)
-//!   * A top horizontal compact mode title bar (dummy URL input + window controls)
-//!   * A large empty rectangle as `engine_viewport` where CEF will eventually render
-//!
-//! This is Phase 2 scaffolding. The Slint template is compiled at build time
-//! via `slint-build` and rendered inside a winit window from `lib.rs`.
+//! Defines a borderless, single-row compact window with:
+//!   * A thin top chrome bar (36px height): window controls, sidebar toggle,
+//!     domain-only URL pill (expands into full LineEdit on click),
+//!     `<`, `>`, `↻`, `[Ext]` buttons
+//!   * A collapsible left vertical sidebar (sidebar_open, 0px ↔ 220px)
+//!   * A floating dark pill at bottom-left of engine_viewport bound to
+//!     hovered_url (visible only when hovered_url != "")
+//!   * A large rectangle as `engine_viewport` where wry WebView renders
 
-import { VerticalBox, HorizontalBox, LineEdit, Rectangle, Text, Button } from "std-widgets.slint";
+import { VerticalBox, HorizontalBox, LineEdit, Rectangle, Text, Button, TouchArea } from "std-widgets.slint";
 
 export component MainWindow inherits Window {
     title: "Obsidian";
@@ -16,6 +17,7 @@ export component MainWindow inherits Window {
     height: 800px;
     background: #050508;
 
+    // Callbacks wired to obsidian-core / winit
     callback request_navigation(string);
     callback request_back();
     callback request_forward();
@@ -23,54 +25,92 @@ export component MainWindow inherits Window {
     callback window_drag_requested();
     callback request_devtools();
     callback request_load_extension();
+    callback request_sidebar_toggle();
+
+    // State
+    property <string> domain_pill: "duckduckgo.com";
+    property <bool> url_expanded: false;
+    property <bool> sidebar_open: false;
+    property <string> hovered_url: "";
 
     // -----------------------------------------------------------------------
-    // Top compact mode title bar
+    // Top compact mode title bar (36px height, thin chrome)
     // -----------------------------------------------------------------------
     TouchArea {
-        // Wrap the entire top bar so dragging anywhere on the background
-        // moves the borderless window. Individual interactive children
-        // (buttons, LineEdit) still receive their own click events because
-        // Slint propagates pointer events to the topmost hit-tested element.
         HorizontalBox {
             background: #0a0a0f;
-            spacing: 4px;
-            padding: 8px;
+            height: 36px;
+            spacing: 6px;
+            padding: 4px;
 
-            // Navigation controls: back, forward, reload
+            // Custom window controls (left side)
             Button {
-                text: "[<]";
-                width: 32px;
+                text: "—";
+                width: 30px;
                 height: 28px;
                 background: #1a1a2e;
                 color: #ccccdd;
-                clicked => { root.request_back(); }
+                clicked => { /* minimize */ }
             }
             Button {
-                text: "[>]";
-                width: 32px;
+                text: "□";
+                width: 30px;
                 height: 28px;
                 background: #1a1a2e;
                 color: #ccccdd;
-                clicked => { root.request_forward(); }
+                clicked => { /* maximize / restore */ }
             }
             Button {
-                text: "[C]";
-                width: 32px;
+                text: "✕";
+                width: 30px;
                 height: 28px;
-                background: #1a1a2e;
-                color: #ccccdd;
-                clicked => { root.request_reload(); }
+                background: #2a1a1e;
+                color: #ff6b6b;
+                clicked => { window.close(); }
             }
 
-            // URL input (compact mode)
-            LineEdit {
-                id: url_input;
-                text: "https://duckduckgo.com";
-                width: 600px;
+            // Sidebar toggle
+            Button {
+                text: if (sidebar_open) { "◀" } else { "▶" };
+                width: 30px;
                 height: 28px;
-                accepted => {
-                    root.request_navigation(text);
+                background: #1a1a2e;
+                color: #00d4ff;
+                clicked => { root.request_sidebar_toggle(); }
+            }
+
+            // Compact domain-only URL pill (expands on click)
+            Rectangle {
+                background: #141420;
+                width: if (url_expanded) { 500px } else { 120px };
+                height: 28px;
+
+                HorizontalBox {
+                    width: parent.width;
+                    height: parent.height;
+                    padding: 4px;
+
+                    Text {
+                        text: domain_pill;
+                        color: #ccccdd;
+                        font-size: 13px;
+                    }
+
+                    // Full LineEdit when expanded
+                    if (url_expanded) {
+                        LineEdit {
+                            text: "https://duckduckgo.com";
+                            width: 1fr;
+                            height: 20px;
+                            accepted => {
+                                root.request_navigation(text);
+                            }
+                        }
+                    }
+                }
+
+                clicked => {
+                    root.url_expanded = !root.url_expanded;
                 }
             }
 
@@ -79,50 +119,48 @@ export component MainWindow inherits Window {
                 width: 1fr;
             }
 
-            // Window controls (traffic-light style)
+            // Navigation: back, forward, reload, ext
             Button {
-                text: "—";
-                width: 36px;
-                height: 24px;
+                text: "<";
+                width: 28px;
+                height: 28px;
                 background: #1a1a2e;
                 color: #ccccdd;
-                clicked => { /* minimize */ }
+                clicked => { root.request_back(); }
             }
             Button {
-                text: "□";
-                width: 36px;
-                height: 24px;
+                text: ">";
+                width: 28px;
+                height: 28px;
                 background: #1a1a2e;
                 color: #ccccdd;
-                clicked => { /* maximize / restore */ }
+                clicked => { root.request_forward(); }
             }
             Button {
-                text: "✕";
-                width: 36px;
-                height: 24px;
-                background: #2a1a1e;
-                color: #ff6b6b;
-                clicked => { window.close(); }
+                text: "↻";
+                width: 28px;
+                height: 28px;
+                background: #1a1a2e;
+                color: #ccccdd;
+                clicked => { root.request_reload(); }
+            }
+            Button {
+                text: "[Ext]";
+                width: 44px;
+                height: 28px;
+                background: #2a2a3a;
+                color: #ffd400;
+                clicked => { root.request_load_extension(); }
             }
 
             // DevTools button
             Button {
                 text: "[D]";
-                width: 32px;
+                width: 28px;
                 height: 28px;
                 background: #2a2a3a;
                 color: #00d4ff;
                 clicked => { root.request_devtools(); }
-            }
-
-            // Extension loader button
-            Button {
-                text: "[Ext]";
-                width: 40px;
-                height: 28px;
-                background: #2a2a3a;
-                color: #ffd400;
-                clicked => { root.request_load_extension(); }
             }
         }
 
@@ -134,69 +172,82 @@ export component MainWindow inherits Window {
     }
 
     // -----------------------------------------------------------------------
-    // Main content area: sidebar + engine viewport
+    // Main content area: collapsible sidebar + engine viewport
     // -----------------------------------------------------------------------
     HorizontalBox {
         width: 1fr;
         height: 1fr;
 
-        // Left-aligned vertical sidebar (Arc-style)
+        // Collapsible left vertical sidebar (Arc-style)
         Rectangle {
             background: #0d0d15;
-            width: 260px;
+            width: if (sidebar_open) { 220px } else { 0px };
+            visible: sidebar_open;
 
             VerticalBox {
-                spacing: 16px;
-                padding: 20px;
+                spacing: 12px;
+                padding: 12px;
 
                 // Brand
                 Text {
                     text: "OBSIDIAN";
                     color: #00d4ff;
-                    font-size: 20px;
+                    font-size: 16px;
                     font-weight: bold;
                 }
 
-                // Vertical tab strip placeholders (Arc-style)
+                // Vertical tab placeholders
                 Rectangle {
                     background: #141420;
-                    width: 48px;
-                    height: 48px;
+                    width: 40px;
+                    height: 40px;
                 }
 
                 Rectangle {
                     background: #141420;
-                    width: 48px;
-                    height: 48px;
+                    width: 40px;
+                    height: 40px;
                 }
 
                 Rectangle {
                     background: #141420;
-                    width: 48px;
-                    height: 48px;
+                    width: 40px;
+                    height: 40px;
                 }
 
-                Rectangle {
-                    background: #141420;
-                    width: 48px;
-                    height: 48px;
-                }
-
-                // New tab / plus button
                 Text {
                     text: "+";
                     color: #666677;
-                    font-size: 24px;
+                    font-size: 20px;
                 }
             }
         }
 
-        // Engine viewport — CEF will eventually render into this rectangle
+        // Engine viewport — wry WebView renders into this rectangle
         Rectangle {
             id: engine_viewport;
             background: #050508;
             width: 1fr;
             height: 1fr;
+
+            // Floating link preview pill (bottom-left)
+            Rectangle {
+                visible: hovered_url != "";
+                background: #141420;
+                color: #ccccdd;
+                x: 12px;
+                y: parent.height - 40px;
+                width: if (hovered_url.length > 60) { 240px } else { 180px };
+                height: 24px;
+                padding: 4px;
+
+                Text {
+                    text: hovered_url;
+                    color: #00d4ff;
+                    font-size: 11px;
+                    ellipsize: true;
+                }
+            }
         }
     }
 }

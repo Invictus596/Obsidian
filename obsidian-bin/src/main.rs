@@ -1,4 +1,4 @@
-use obsidian_core::{create_browser as core_create_browser, init as core_init};
+use obsidian_core::BrowserEngine;
 use obsidian_ui::{init as ui_init, run_event_loop};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -10,34 +10,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::info!("  Unconquered speed over Chromium");
     log::info!("========================================");
 
-    // Phase 1: initialize the CEF engine core.
-    core_init().map_err(|e| {
-        log::error!("Failed to initialize engine core: {}", e);
-        e
-    })?;
-
     // Phase 2: initialize the UI shell (borderless winit window + Slint UI).
-    let (viewport, window, event_loop) = ui_init().map_err(|e| {
+    let (window, event_loop) = ui_init().map_err(|e| {
         log::error!("Failed to initialize UI shell: {}", e);
         e
     })?;
 
-    // Extract the native window handle as an OS-agnostic raw pointer.
-    let hwnd = viewport.as_raw_pointer();
-    log::info!("Native viewport handle: {:?}", hwnd);
+    log::info!("Native window handle acquired for WebView embedding.");
 
-    // Phase 2.5: attach the CEF browser to the UI viewport and navigate.
-    core_create_browser(hwnd, "https://duckduckgo.com").map_err(|e| {
-        log::error!("Failed to create CEF browser: {}", e);
+    // Phase 4.1: create the wry WebView attached as a child of the winit window.
+    let initial_x = 220; // sidebar width when open
+    let initial_y = 36;  // top bar height
+    let size = window.inner_size();
+    let initial_width = size.width.saturating_sub(220);
+    let initial_height = size.height.saturating_sub(36);
+
+    let webview = BrowserEngine::new(&window, initial_x, initial_y, initial_width, initial_height)
+        .map_err(|e| {
+            log::error!("Failed to create WebView: {}", e);
+            e
+        })?;
+
+    // Navigate to the default URL.
+    webview.navigate("https://duckduckgo.com").map_err(|e| {
+        log::error!("Failed to navigate: {}", e);
         e
     })?;
 
     log::info!("Obsidian is up and running.");
 
-    // Phase 3.7: start the UI event loop. Resize/move events are forwarded to
-    // obsidian_core::resize_browser() so the CEF browser stays in sync with
-    // the engine_viewport coordinates.
-    run_event_loop(&window, event_loop, hwnd).map_err(|e| {
+    // Phase 4.1: start the UI event loop. Resize/move events are forwarded to
+    // the WebView's set_bounds() so it stays in sync with the viewport.
+    run_event_loop(&window, event_loop, &webview).map_err(|e| {
         log::error!("Event loop failed: {}", e);
         e
     })?;

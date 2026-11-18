@@ -1,6 +1,6 @@
 [package]
 name = "obsidian-core"
-description = "CEF C-API bindings and browser engine lifecycle for the Obsidian web browser."
+description = "OS-native WebView browser engine lifecycle for the Obsidian web browser."
 version = "0.1.0"
 edition = "2021"
 
@@ -10,19 +10,13 @@ path = "src/lib.rs"
 [dependencies]
 log = "0.4"
 thiserror = "1.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
-# Chromium Embedded Framework bindings. Optional — only linked when the
-# `cef-bindings` feature is enabled. Requires pre-compiled CEF binaries
-# discovered via build.rs (CEF_ROOT env var or default cef_binary/ folder).
-cef = { version = "156", optional = true }
+# OS-native WebView (~10MB target): Edge WebView2 on Windows, WebKitGTK on Linux,
+# Android WebView on mobile. Pairs with winit for cross-platform window embedding.
+wry = "0.47"
 
-# Win32 API for SetWindowPos (CEF viewport constraint).
-windows-sys = { version = "0.52", optional = true, features = [
-    "Win32_Foundation",
-    "Win32_UI_WindowsAndMessaging",
-] }
-
-[features]
-default = []
-cef-bindings = ["dep:cef"]
-win32 = ["dep:windows-sys"]
+# Needed for raw-window-handle interop when passing the winit Window to wry.
+raw-window-handle = "0.6"
+winit = "0.30"
